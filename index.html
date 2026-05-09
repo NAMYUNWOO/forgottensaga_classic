@@ -4,26 +4,21 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510023008"></script>
+    <script src="coi-serviceworker.js?v=20260510023956"></script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=overlays-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510023008">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510023008">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510023008">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510023008">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510023956">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510023956">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510023956">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510023956">
     <style>
-      /* body / html 자체를 viewport 에 고정 — 키보드 등장 시 visual viewport 가
-       * 위로 밀려도 layout viewport 와 fixed body 는 그대로. JS 가 --vh-fixed CSS
-       * variable 으로 initial height 캡처. */
       html, body {
         margin: 0; padding: 0;
         background: #000;
         overflow: hidden;
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
         width: 100%;
         height: 100%;
       }
@@ -34,11 +29,12 @@
        * mobile media query 를 inline 안에 두는 이유: mobile_input.css 가 inline 보다
        * 먼저 load 되므로 외부 css 의 override 는 specifity 동일 시 적용 안 됨. */
       .game-wrap {
-          /* fixed body 안에서 100% — body 가 viewport 고정이니 game-wrap 도 고정. */
-          position: absolute;
+          /* viewport 에 fixed — 키보드 등장 시 visual viewport 변경되어도 layout
+           * viewport 기준 fixed 라 위치 유지. */
+          position: fixed;
           top: 0; left: 0; right: 0; bottom: 0;
-          width: 100%;
-          height: 100%;
+          width: 100vw;
+          height: 100vh;
           display: flex;
           /* PC: vertical center 보다 약간 위로 (브라우저 도구바 시각 보정).
            * flex-start + padding-top 8vh → 화면 위에서 8% 여백 후 시작. */
@@ -256,20 +252,25 @@
       });
 
       // 모바일 키보드 등장/dismiss 시 visualViewport 가 위로 밀린 채 회복 안 되는
-      // issue 회피. visualViewport.resize 마다 window.scrollTo(0, 0) 강제.
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', function() {
-          window.scrollTo(0, 0);
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
+      // issue 회피. listener throw 무시 (모든 모바일 브라우저 호환).
+      try {
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', function() {
+            try {
+              window.scrollTo(0, 0);
+              if (document.documentElement) document.documentElement.scrollTop = 0;
+              if (document.body) document.body.scrollTop = 0;
+            } catch (e) {}
+          });
+        }
+      } catch (e) { console.warn('visualViewport listener fail:', e); }
+      try {
+        window.addEventListener('orientationchange', function() {
+          setTimeout(function() {
+            try { window.scrollTo(0, 0); } catch (e) {}
+          }, 200);
         });
-      }
-      // orientation change 후 가능한 빨리 scroll reset
-      window.addEventListener('orientationchange', function() {
-        setTimeout(function() {
-          window.scrollTo(0, 0);
-        }, 200);
-      });
+      } catch (e) {}
       // Lua side 에서 print() sentinel 보내면 splash hide.
       window.LOVE2D_BOOT_DONE_SENTINEL = "LOVE2D_BOOT_DONE";
 
@@ -368,36 +369,43 @@
       // emscripten IDBFS 의 reconcile 동작 (MEMFS = source-of-truth) 을 우회 위해
       // game runtime 의 MEMFS 에 직접 file 생성 → syncfs(false) 시 IDBFS 에 sync.
       function preRunInjectUploads() {
-        // 영속 (localStorage) + sessionStorage 둘 다 수집 (sessionStorage 우선
-        // 처리, 실패 시 localStorage). localStorage 는 사용자가 수동 clear 까지 유지.
-        var pending = [];
+        // OUTER try-catch — storage access 가 모바일 Chrome incognito / 3rd-party
+        // cookie blocked / privacy mode 등에서 SecurityError throw → emscripten
+        // dependency loading 차단 방지. 어떤 throw 든 silent.
         try {
-          var raw1 = sessionStorage.getItem('love2d_pending_uploads');
-          if (raw1) {
-            sessionStorage.removeItem('love2d_pending_uploads');
-            var arr1 = JSON.parse(raw1);
-            for (var i = 0; i < arr1.length; i++) pending.push(arr1[i]);
-          }
-        } catch (e) { console.warn('[preRun] sessionStorage error:', e); }
-        // localStorage 의 slot-specific keys (love2d_upload_slot_N)
-        try {
-          for (var slot = 0; slot <= 5; slot++) {
-            var raw2 = localStorage.getItem('love2d_upload_slot_' + slot);
-            if (!raw2) continue;
-            var item = JSON.parse(raw2);
-            // 이미 sessionStorage 에 같은 path 있으면 skip (중복 방지)
-            var dup = false;
-            for (var j = 0; j < pending.length; j++) {
-              if (pending[j].path === item.path) { dup = true; break; }
+          var pending = [];
+          try {
+            if (typeof sessionStorage !== 'undefined') {
+              var raw1 = sessionStorage.getItem('love2d_pending_uploads');
+              if (raw1) {
+                try { sessionStorage.removeItem('love2d_pending_uploads'); } catch (e2) {}
+                var arr1 = JSON.parse(raw1);
+                for (var i = 0; i < arr1.length; i++) pending.push(arr1[i]);
+              }
             }
-            if (!dup) pending.push(item);
-          }
-        } catch (e) { console.warn('[preRun] localStorage error:', e); }
+          } catch (e) { console.warn('[preRun] sessionStorage error:', e); }
+          // localStorage 의 slot-specific keys
+          try {
+            if (typeof localStorage !== 'undefined') {
+              for (var slot = 0; slot <= 5; slot++) {
+                var raw2;
+                try { raw2 = localStorage.getItem('love2d_upload_slot_' + slot); }
+                catch (e3) { continue; }
+                if (!raw2) continue;
+                var item;
+                try { item = JSON.parse(raw2); } catch (e4) { continue; }
+                var dup = false;
+                for (var j = 0; j < pending.length; j++) {
+                  if (pending[j].path === item.path) { dup = true; break; }
+                }
+                if (!dup) pending.push(item);
+              }
+            }
+          } catch (e) { console.warn('[preRun] localStorage error:', e); }
 
-        if (!pending.length) return;
-        console.log('[preRun] called, Module keys:', Object.keys(Module).slice(0, 30));
-        console.log('[preRun] pending count:', pending.length);
-        try {
+          if (!pending.length) return;
+          console.log('[preRun] pending count:', pending.length);
+          try {
           for (var i = 0; i < pending.length; i++) {
             var item = pending[i];
             var bin = atob(item.b64);
@@ -429,8 +437,12 @@
               console.warn('[preRun] inject 실패:', item.path, e);
             }
           }
-        } catch (e) {
-          console.warn('[preRun] pending uploads 처리 오류:', e);
+          } catch (e) {
+            console.warn('[preRun] pending uploads 처리 오류:', e);
+          }
+        } catch (eOuter) {
+          // OUTER catch — preRun 의 모든 throw 를 emscripten 진행 차단 안 시키게
+          console.warn('[preRun] outer error (silent):', eOuter);
         }
       }
 
@@ -467,6 +479,7 @@
             return;
           }
           if (trimmed === '[SAV_DOWNLOAD_END]' && window.__savDl) {
+            window.__savDlReceivedAt = Date.now();   // SaveControls timeout fallback 신호
             triggerSavDownload(window.__savDl);
             window.__savDl = null;
             return;
@@ -512,18 +525,41 @@
         },
       };
       Module.setStatus('자산 다운로드 중...');
-      window.onerror = function(event) {
-        Module.setStatus('오류 발생 — JavaScript console 확인');
+      // onerror — error message 를 splash substatus 에 표시 (사용자가 mobile console
+      // 못 봐도 어떤 에러인지 화면에서 인지). 단 한 번만 (loop 방지).
+      window.onerror = function(message, source, lineno, colno, error) {
+        try {
+          var info = String(message || '');
+          if (lineno) info += ' @' + lineno + ':' + (colno || 0);
+          var sub = document.getElementById('splash-substatus');
+          if (sub) {
+            sub.style.color = '#ff8888';
+            sub.textContent = '오류: ' + info.slice(0, 200);
+          }
+          Module.setStatus('JS 오류 발생 (위 메시지 참조)');
+        } catch (e) {}
+        // 추가 error 무시 (loop 방지)
         Module.setStatus = function(text) {
-          if (text) Module.printErr('[post-exception status] ' + text);
+          if (text) try { Module.printErr('[post-exception] ' + text); } catch (e) {}
         };
       };
+      // unhandled promise rejection 도 같은 path 으로
+      window.addEventListener('unhandledrejection', function(ev) {
+        try {
+          var info = String(ev.reason || 'unhandled');
+          var sub = document.getElementById('splash-substatus');
+          if (sub) {
+            sub.style.color = '#ffaa66';
+            sub.textContent = 'Promise: ' + info.slice(0, 180);
+          }
+        } catch (e) {}
+      });
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510023008"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510023008"></script>
-    <script type="text/javascript" src="game.js?v=20260510023008"></script>
-    <script async type="text/javascript" src="love.js?v=20260510023008" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510023956"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510023956"></script>
+    <script type="text/javascript" src="game.js?v=20260510023956"></script>
+    <script async type="text/javascript" src="love.js?v=20260510023956" onload="applicationLoad(this)"></script>
   </body>
 </html>

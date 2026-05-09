@@ -195,8 +195,10 @@ const SaveControls = (() => {
   }
 
   async function downloadSlot(slotIdx) {
-    // Lua → JS bridge — F2-F6 (slot 1-5) 또는 F7 (slot 0=seed) 키 dispatch.
-    // Lua 가 받아 sav 를 base64 print → index.html 의 Module.print 가 blob 으로 download.
+    // 두 path 시도:
+    //   1순위: Lua → JS bridge (F-key dispatch). 게임 진행 중 MEMFS 의 최신 sav.
+    //   2순위 (5초 timeout 후): IndexedDB direct read. game 종료 시 syncfs(false)
+    //          가 IDBFS 에 저장한 sav. 단 syncfs 안 됐으면 stale.
     const FN_KEY_MAP = {
       0: { key: 'F7',  code: 'F7',  keyCode: 118 },
       1: { key: 'F2',  code: 'F2',  keyCode: 113 },
@@ -207,33 +209,95 @@ const SaveControls = (() => {
     };
     const def = FN_KEY_MAP[slotIdx];
     if (!def) { status(`Slot ${slotIdx}: 미지원 slot`, 'error'); return; }
-    status(`Slot ${slotIdx}: 다운로드 준비 중... (게임에서 sav read)`, '');
+
+    // window.__savDl (index.html 의 print handler 가 set/clear) 가 sentinel 받으면
+    // dl.slot 에 slotIdx string 저장. 5초 후 그것 확인 — 못 받았으면 fallback.
+    const dispatchTime = Date.now();
+    window.__savDlExpected = String(slotIdx);
+    window.__savDlTime = dispatchTime;
+
+    status(`Slot ${slotIdx}: 게임에서 sav 읽는 중...`, '');
+
+    // Lua bridge dispatch
     const canvas = document.getElementById('canvas');
-    if (!canvas) { status('canvas 없음', 'error'); return; }
-    // 1. canvas focus — SDL2 keyboard listener 가 canvas focus 요구하는 빌드 호환.
-    try { canvas.focus(); } catch (e) {}
-    // 2. dispatch 를 다양한 target 에 — canvas / document / window. love.js fork 마다
-    //    listener 위치 달라 모두에 dispatch (bubbles:true 라 ancestor 도 받지만 일부
-    //    빌드는 capture phase 만 listen — 직접 dispatch 가 안전).
-    const targets = [canvas, document, window];
-    for (const target of targets) {
-      const evd = new KeyboardEvent('keydown', {
-        key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
-        bubbles: true, cancelable: true,
-      });
-      target.dispatchEvent(evd);
-    }
-    // keyup 도 동일하게
-    setTimeout(function() {
+    if (canvas) {
+      try { canvas.focus(); } catch (e) {}
+      const targets = [canvas, document, window];
       for (const target of targets) {
-        const evu = new KeyboardEvent('keyup', {
-          key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
-          bubbles: true, cancelable: true,
-        });
-        target.dispatchEvent(evu);
+        try {
+          const evd = new KeyboardEvent('keydown', {
+            key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+            bubbles: true, cancelable: true,
+          });
+          target.dispatchEvent(evd);
+        } catch (e) {}
       }
-    }, 50);
-    console.log('[SaveControls] download dispatch:', def.key, 'for slot', slotIdx);
+      setTimeout(function() {
+        for (const target of targets) {
+          try {
+            const evu = new KeyboardEvent('keyup', {
+              key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+              bubbles: true, cancelable: true,
+            });
+            target.dispatchEvent(evu);
+          } catch (e) {}
+        }
+      }, 50);
+      console.log('[SaveControls] Lua bridge dispatch:', def.key, 'for slot', slotIdx);
+    }
+
+    // 5초 후 — Lua bridge 가 안 받았으면 IndexedDB fallback
+    setTimeout(async function() {
+      // sentinel 도착 = window.__savDlExpected 가 이미 다른 값이거나 지워졌으면 OK
+      if (window.__savDlReceivedAt && window.__savDlReceivedAt >= dispatchTime) {
+        return;  // Lua bridge 성공
+      }
+      console.warn('[SaveControls] Lua bridge timeout — IndexedDB fallback 시도');
+      const dir = getSaveDir();
+      if (!dir) { status(`Slot ${slotIdx}: save dir 미검출 + Lua bridge timeout`, 'error'); return; }
+      if (!await detectDB()) {
+        status(`Slot ${slotIdx}: 게임에서 저장 후 페이지 새로고침 → 다시 시도`, 'error');
+        return;
+      }
+      try {
+        const filename = SLOT_FILES[slotIdx - 1] || ('saga0' + slotIdx + '.sav');
+        const path = dir + '/' + filename;
+        const entry = await idbRead(path);
+        if (!entry || !entry.contents) {
+          status(`Slot ${slotIdx}: 게임에서 저장 후 페이지 새로고침 → 다시 시도`, 'error');
+          return;
+        }
+        const blob = new Blob([entry.contents], { type: 'application/octet-stream' });
+        triggerBlobDownload(blob, filename);
+        status(`Slot ${slotIdx}: 다운로드 (IndexedDB, ${entry.contents.length} byte)`, 'success');
+      } catch (e) {
+        status(`Slot ${slotIdx}: ${e.message || 'fallback fail'}`, 'error');
+      }
+    }, 5000);
+  }
+
+  // Blob 다운로드 helper — navigator.share 우선 (iOS Safari 호환), <a download> fallback.
+  function triggerBlobDownload(blob, filename) {
+    try {
+      const file = new File([blob], filename, { type: 'application/octet-stream' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: '포가튼사가 세이브' })
+          .catch(function(e) { console.warn('share fail:', e); fallbackA(); });
+        return;
+      }
+    } catch (e) {}
+    fallbackA();
+    function fallbackA() {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function() {
+        try { a.remove(); URL.revokeObjectURL(url); } catch (e) {}
+      }, 1000);
+    }
   }
 
   // SessionStorage key — page reload 시 Module.preRun 가 읽음.
