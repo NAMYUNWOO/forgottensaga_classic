@@ -134,30 +134,15 @@ const SaveControls = (() => {
     });
   }
 
+  // IDBFS 직접 write — 호환성 issue (모바일 Chrome 에서 reconcile 차단 또는
+  // throw) 로 사용 안 함. 아래 함수는 keep 하지만 uploadSlot 에서 호출 안 함.
+  // 영속 저장은 localStorage (preRun MEMFS inject) 사용.
   async function idbWrite(path, u8) {
     const db = await openIDBFS();
     return new Promise((res, rej) => {
       const tx = db.transaction([_storeName], 'readwrite');
       const store = tx.objectStore(_storeName);
-      // Parent directory entries 도 put — emscripten IDBFS reconcile 가 file 만
-      // 보면 parent dir 부재로 차단. directory entry = mode 16877 (S_IFDIR | 0755),
-      // contents 없음 (또는 빈 Uint8Array).
-      const parts = path.split('/').filter(s => s.length > 0);
-      const now = new Date();
-      let cur = '';
-      for (let i = 0; i < parts.length - 1; i++) {
-        cur += '/' + parts[i];
-        store.put({
-          mode: 16877,             // S_IFDIR | 0755
-          timestamp: now,
-        }, cur);
-      }
-      // File entry
-      const value = {
-        contents: u8,
-        mode: 33188,               // S_IFREG | 0644
-        timestamp: now,
-      };
+      const value = { contents: u8, mode: 33188, timestamp: new Date() };
       const r = store.put(value, path);
       r.onsuccess = () => { db.close(); res(); };
       r.onerror   = () => { db.close(); rej(r.error); };
@@ -258,24 +243,24 @@ const SaveControls = (() => {
     try {
       const buf = await file.arrayBuffer();
       const u8  = new Uint8Array(buf);
-      // 1. IDBFS 직접 write (parent dir entries 포함) — page reload 시 emscripten
-      //    이 IDBFS → MEMFS load 하므로 영속.
-      let idbOK = false;
-      if (await detectDB()) {
-        try { await idbWrite(path, u8); idbOK = true; }
-        catch (e) { console.warn('idbWrite fail:', e); }
+      // 영속 저장 — localStorage 에 base64. 매 page reload 시 preRun 이 읽어
+      // MEMFS 에 inject. localStorage 는 영구 (브라우저 수동 clear 까지).
+      // Per-slot key 으로 저장 → 같은 slot 재업로드 시 overwrite, 다른 slot 별도 보존.
+      const lskey = 'love2d_upload_slot_' + slotIdx;
+      const b64 = uint8ToBase64(u8);
+      try {
+        localStorage.setItem(lskey, JSON.stringify({ path: path, b64: b64 }));
+      } catch (e) {
+        status(`Slot ${slotIdx} 업로드 실패 (storage 한계): ${e.message}`, 'error');
+        return;
       }
-      // 2. SessionStorage 에 base64 저장 — preRun MEMFS inject 의 fallback
-      //    (현 page 에서 reload 없이도 이후 reload 의 MEMFS 에 inject).
+      // SessionStorage 도 동일하게 저장 (같은 page 의 다음 reload 우선 inject)
       try {
         const pending = JSON.parse(sessionStorage.getItem(PENDING_UPLOAD_KEY) || '[]');
-        pending.push({ path: path, b64: uint8ToBase64(u8) });
+        pending.push({ path: path, b64: b64 });
         sessionStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
-      } catch (e) { /* sessionStorage quota exceed — IDBFS 가 main path 면 OK */ }
-      const note = idbOK
-        ? '페이지 새로고침 후 게임에서 load slot 사용 가능. 영속 OK.'
-        : '페이지 새로고침 후 일회성 inject (영속 X — IDBFS 검출 실패).';
-      status(`Slot ${slotIdx}: 업로드 (${u8.length} byte). ${note}`, 'success');
+      } catch (e) { /* quota exceed — localStorage 가 main path */ }
+      status(`Slot ${slotIdx}: 업로드 완료 (${u8.length} byte). 페이지 새로고침 후 게임에서 ${slotIdx}번 슬롯 사용. 영속 저장 OK.`, 'success');
       await renderSlots();
     } catch (e) {
       status(`Slot ${slotIdx} 업로드 실패: ${e.message}`, 'error');
