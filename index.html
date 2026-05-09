@@ -94,8 +94,14 @@
         <div id="splash-substatus">자산 다운로드 중...</div>
       </div>
 
-      <!-- Save 컨트롤 (우상단 toggle + 패널) -->
-      <button id="save-panel-toggle">💾 세이브</button>
+      <!-- 우상단 controls — PC + mobile 둘 다 표시 (mobile 에선 키패드 위 row 로 이동) -->
+      <div class="top-right">
+        <button class="btn" id="btn-ime">키보드</button>
+        <button class="btn" id="btn-fullscreen">전체화면</button>
+        <button class="btn" id="btn-sound" title="사운드 ON/OFF">🔊 사운드</button>
+        <button class="btn" id="btn-save">💾 세이브</button>
+      </div>
+
       <div id="save-panel" class="hidden">
         <button class="close-btn">✕</button>
         <h2>세이브 슬롯 관리</h2>
@@ -109,7 +115,7 @@
 
       <!-- 모바일 가상 키패드 (touch 디바이스에서만 표시, CSS 분기) -->
       <div id="mobile-input">
-        <input id="mobile-ime" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input id="mobile-ime" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="👆 여기를 터치하여 키보드 입력">
 
         <!-- 좌하단 조이스틱: 4방향 키 emulation. drag 위치 → angle 으로 방향 dispatch. -->
         <div class="joystick" id="joystick">
@@ -128,10 +134,6 @@
           </div>
         </div>
 
-        <div class="top-right">
-          <button class="btn" id="btn-ime">키보드</button>
-          <button class="btn" id="btn-fullscreen">전체화면</button>
-        </div>
       </div>
     </div>
 
@@ -157,12 +159,52 @@
       // Lua side 에서 print() sentinel 보내면 splash hide.
       window.LOVE2D_BOOT_DONE_SENTINEL = "LOVE2D_BOOT_DONE";
 
+      // Sound toggle — 모바일 autoplay 정책 회피 (사용자 첫 gesture 후 audio context
+       // resume) + Lua 측 mute toggle (F10 key dispatch). 동작:
+       //   1. Web Audio context 가 suspended 면 resume() (브라우저 첫 user gesture)
+       //   2. Lua 가 F10 받으면 Sound.mute / Sound.unmute toggle
+       //   3. button label 갱신 (🔊 / 🔇)
+      function toggleSound() {
+        var btn = document.getElementById('btn-sound');
+        if (!btn) return;
+        // 1. AudioContext resume (모바일 autoplay 차단 해제)
+        try {
+          if (window.Module && window.Module.SDL2 && window.Module.SDL2.audioContext) {
+            window.Module.SDL2.audioContext.resume();
+          }
+        } catch (e) {}
+        // 2. F10 keyboard event dispatch (Lua 가 Sound.mute toggle)
+        var canvas = document.getElementById('canvas') || window;
+        var ev = new KeyboardEvent('keydown', {
+          key: 'F10', code: 'F10', keyCode: 121, which: 121,
+          bubbles: true, cancelable: true,
+        });
+        canvas.dispatchEvent(ev);
+        var ev2 = new KeyboardEvent('keyup', {
+          key: 'F10', code: 'F10', keyCode: 121, which: 121,
+          bubbles: true, cancelable: true,
+        });
+        canvas.dispatchEvent(ev2);
+        // 3. label 토글
+        if (btn.dataset.muted === '1') {
+          btn.dataset.muted = '0';
+          btn.textContent = '🔊 사운드';
+          btn.classList.remove('muted');
+        } else {
+          btn.dataset.muted = '1';
+          btn.textContent = '🔇 음소거';
+          btn.classList.add('muted');
+        }
+      }
+
       window.onload = function () {
         window.focus();
         if (window.MobileInput) MobileInput.install();
         if (window.SaveControls) SaveControls.install();
         var fbtn = document.getElementById('btn-fullscreen');
         if (fbtn) fbtn.addEventListener('click', goFullScreen);
+        var sbtn = document.getElementById('btn-sound');
+        if (sbtn) sbtn.addEventListener('click', toggleSound);
       };
 
       // 화살표/스페이스 default browser scroll 방지

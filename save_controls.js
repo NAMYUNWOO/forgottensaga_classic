@@ -330,7 +330,8 @@ const SaveControls = (() => {
   }
 
   function install() {
-    const toggle = document.getElementById('save-panel-toggle');
+    const toggle = document.getElementById('btn-save')
+                || document.getElementById('save-panel-toggle');  // 구버전 ID 호환
     const panel = document.getElementById('save-panel');
     const close = document.querySelector('#save-panel .close-btn');
     if (toggle && panel) {

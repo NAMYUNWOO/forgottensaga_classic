@@ -83,31 +83,9 @@
     border-color: rgba(200, 100, 100, 0.4);
 }
 
-#save-panel-toggle {
-    position: fixed;
-    top: 14px; right: 14px;
-    z-index: 199;
-    background: rgba(40, 40, 60, 0.7);
-    color: #ffd566;
-    border: 2px solid rgba(200, 200, 220, 0.5);
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-}
-#save-panel-toggle:hover { background: rgba(80, 80, 120, 0.8); }
-
-/* 모바일: 캔버스 위가 아닌 키패드 위 우측 row 로 이동 (한글입력 + 전체화면 옆) */
-@media (pointer: coarse), (max-width: 1024px) {
-    #save-panel-toggle {
-        top: auto;
-        right: 14px;
-        bottom: 196px;
-        height: 40px;
-        padding: 0 12px;
-    }
-}
+/* save-panel-toggle 의 styling 은 .top-right .btn (mobile_input.css) 으로 이전.
+ * 구버전 ID 호환만 위해 hidden — 새 빌드는 #btn-save 사용. */
+#save-panel-toggle { display: none; }
 
 #save-status {
     margin-top: 12px;
