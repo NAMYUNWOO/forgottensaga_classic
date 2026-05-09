@@ -4,16 +4,16 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510020325"></script>
+    <script src="coi-serviceworker.js?v=20260510020807"></script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=overlays-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510020325">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510020325">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510020325">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510020325">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510020807">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510020807">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510020807">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510020807">
     <style>
       body { margin: 0; padding: 0; overflow: hidden; background: #000; }
       #canvas { display: block; margin: 0 auto; outline: none; }
@@ -248,6 +248,44 @@
       // Lua side 에서 print() sentinel 보내면 splash hide.
       window.LOVE2D_BOOT_DONE_SENTINEL = "LOVE2D_BOOT_DONE";
 
+      // Sav download trigger — Lua 가 보낸 chunk 모음을 blob 으로 사용자에게 전달.
+      // iOS Safari 의 download attribute 미지원 회피 위해 navigator.share 우선 시도.
+      function triggerSavDownload(dl) {
+        var b64 = dl.chunks.join('');
+        var bin = atob(b64);
+        var u8 = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        var slotPad = ('0' + dl.slot).slice(-2);
+        var filename = 'saga' + slotPad + '.sav';
+        var blob = new Blob([u8], { type: 'application/octet-stream' });
+        // 1순위: Web Share API (iOS / Android 모두 native file 저장 / 공유 가능)
+        try {
+          var file = new File([blob], filename, { type: 'application/octet-stream' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: '포가튼사가 세이브' })
+              .catch(function(e) { console.warn('share fail, fallback to <a>:', e); fallbackDownload(); });
+            return;
+          }
+        } catch (e) {}
+        // 2순위: <a download> (Android Chrome / desktop)
+        function fallbackDownload() {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url; a.download = filename;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function() {
+            a.remove();
+            URL.revokeObjectURL(url);
+          }, 1000);
+        }
+        fallbackDownload();
+        if (window.SaveControls && window.SaveControls.setStatus) {
+          window.SaveControls.setStatus('Slot ' + dl.slot + ': 다운로드 (' + u8.length + ' byte)', 'success');
+        }
+      }
+
       // Sound toggle — 모바일 autoplay 정책 회피 (사용자 첫 gesture 후 audio context
        // resume) + Lua 측 mute toggle (F10 key dispatch). 동작:
        //   1. Web Audio context 가 suspended 면 resume() (브라우저 첫 user gesture)
@@ -356,8 +394,6 @@
         preRun: [preRunInjectUploads],
         printErr: console.error.bind(console),
         // Lua print() 의 sentinel 감시.
-        //   LOVE2D_BOOT_DONE → splash hide
-        //   [SAVE_DIR] <path> → SaveControls.setSaveDir(path)
         print: function(text) {
           var trimmed = (text || '').replace(/[\r\n]+$/, '').trim();
           if (trimmed === window.LOVE2D_BOOT_DONE_SENTINEL) {
@@ -371,6 +407,31 @@
               window.SaveControls.setSaveDir(sdMatch[1]);
             }
             console.log('[SaveControls] save dir from Lua:', sdMatch[1]);
+            return;
+          }
+          // Sav 다운로드 bridge — Lua 가 base64 chunk 으로 forward
+          var beginM = trimmed.match(/^\[SAV_DOWNLOAD_BEGIN\]\s+(\d+)\s+(\d+)$/);
+          if (beginM) {
+            window.__savDl = { slot: beginM[1], totalLen: parseInt(beginM[2]), chunks: [] };
+            return;
+          }
+          var chunkM = trimmed.match(/^\[SAV_DOWNLOAD_CHUNK\]\s+(.+)$/);
+          if (chunkM && window.__savDl) {
+            window.__savDl.chunks.push(chunkM[1]);
+            return;
+          }
+          if (trimmed === '[SAV_DOWNLOAD_END]' && window.__savDl) {
+            triggerSavDownload(window.__savDl);
+            window.__savDl = null;
+            return;
+          }
+          var errM = trimmed.match(/^\[SAV_DOWNLOAD_ERR\]\s+(\d+)\s+(.+)$/);
+          if (errM) {
+            window.__savDl = null;
+            console.warn('[SaveControls] download error slot ' + errM[1] + ': ' + errM[2]);
+            if (window.SaveControls && window.SaveControls.setStatus) {
+              window.SaveControls.setStatus('Slot ' + errM[1] + ': ' + errM[2], 'error');
+            }
             return;
           }
           console.log(text);
@@ -414,9 +475,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510020325"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510020325"></script>
-    <script type="text/javascript" src="game.js?v=20260510020325"></script>
-    <script async type="text/javascript" src="love.js?v=20260510020325" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510020807"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510020807"></script>
+    <script type="text/javascript" src="game.js?v=20260510020807"></script>
+    <script async type="text/javascript" src="love.js?v=20260510020807" onload="applicationLoad(this)"></script>
   </body>
 </html>

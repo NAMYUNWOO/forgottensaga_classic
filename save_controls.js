@@ -196,24 +196,32 @@ const SaveControls = (() => {
   }
 
   async function downloadSlot(slotIdx) {
-    const dir = getSaveDir();
-    if (!dir) { status('save dir 미검출', 'error'); return; }
-    if (!await detectDB()) { status('IDBFS DB 미검출', 'error'); return; }
-    const filename = SLOT_FILES[slotIdx - 1];
-    const path = dir + '/' + filename;
-    try {
-      const entry = await idbRead(path);
-      if (!entry || !entry.contents) { status(`Slot ${slotIdx}: 파일 없음`, 'error'); return; }
-      const blob = new Blob([entry.contents], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      status(`Slot ${slotIdx}: ${filename} 다운로드 완료`, 'success');
-    } catch (e) {
-      status(`Slot ${slotIdx}: ${e.message || '읽기 실패'}`, 'error');
-    }
+    // Lua → JS bridge — F2-F6 (slot 1-5) 또는 F7 (slot 0=seed) 키 dispatch.
+    // Lua 가 받아 sav 를 base64 print → index.html 의 Module.print 가 blob 으로 download.
+    // emscripten IDBFS sync timing 무관하게 game runtime 의 최신 sav read.
+    const FN_KEY_MAP = {
+      0: { key: 'F7',  code: 'F7',  keyCode: 118 },
+      1: { key: 'F2',  code: 'F2',  keyCode: 113 },
+      2: { key: 'F3',  code: 'F3',  keyCode: 114 },
+      3: { key: 'F4',  code: 'F4',  keyCode: 115 },
+      4: { key: 'F5',  code: 'F5',  keyCode: 116 },
+      5: { key: 'F6',  code: 'F6',  keyCode: 117 },
+    };
+    const def = FN_KEY_MAP[slotIdx];
+    if (!def) { status(`Slot ${slotIdx}: 미지원 slot`, 'error'); return; }
+    status(`Slot ${slotIdx}: 다운로드 준비 중... (게임에서 sav read)`, '');
+    const canvas = document.getElementById('canvas') || window;
+    const evd = new KeyboardEvent('keydown', {
+      key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+      bubbles: true, cancelable: true,
+    });
+    canvas.dispatchEvent(evd);
+    const evu = new KeyboardEvent('keyup', {
+      key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+      bubbles: true, cancelable: true,
+    });
+    canvas.dispatchEvent(evu);
+    // 결과는 Lua 의 print 가 Module.print (index.html) 으로 forward → triggerSavDownload
   }
 
   // SessionStorage key — page reload 시 Module.preRun 가 읽음.
@@ -345,7 +353,7 @@ const SaveControls = (() => {
     }), 3000);
   }
 
-  return { install, renderSlots, downloadSlot, uploadSlot, deleteSlot, setSaveDir, detectDB };
+  return { install, renderSlots, downloadSlot, uploadSlot, deleteSlot, setSaveDir, detectDB, setStatus: status };
 })();
 
 window.SaveControls = SaveControls;
