@@ -301,14 +301,22 @@ const SaveControls = (() => {
     if (!container) return;
     container.innerHTML = '<div style="color:#888;font-size:12px">로딩 중...</div>';
 
-    if (!await detectDB()) {
-      container.innerHTML = '<div style="color:#ff8080;font-size:12px">IDBFS DB 검출 실패. 게임을 한 번 실행한 후 다시 시도하세요.</div>';
-      return;
+    // IDBFS DB 검출 — 못 찾아도 panel 은 표시 (다운로드는 Lua bridge 로 동작).
+    const idbAvailable = !!(await detectDB());
+    if (!idbAvailable) {
+      console.log('[SaveControls] IDBFS 검출 X — panel 은 표시 (다운로드는 Lua bridge)');
     }
 
     container.innerHTML = '';
+    if (!idbAvailable) {
+      const note = document.createElement('div');
+      note.style.cssText = 'color:#aaa;font-size:11px;margin-bottom:10px;padding:8px;background:rgba(60,60,80,0.4);border-radius:6px';
+      note.innerHTML = '⚠ 슬롯 정보 미표시 (IDBFS 미동기). 다운로드/업로드는 정상 동작. 게임 안 저장 후 즉시 다운로드 가능.';
+      container.appendChild(note);
+    }
     for (let i = 1; i <= 5; i++) {
-      const meta = await readSlotMeta(i);
+      const meta = idbAvailable ? await readSlotMeta(i) : { exists: false };
+      // IDBFS 검출 실패 시에도 다운로드 버튼 활성 — Lua bridge 가 sav 존재 여부 확인.
       const exists = meta && meta.exists;
       const div = document.createElement('div');
       div.className = 'slot';
@@ -323,7 +331,7 @@ const SaveControls = (() => {
             : SLOT_FILES[i-1]}
         </div>
         <div class="slot-actions">
-          <button data-slot="${i}" data-act="download" ${exists ? '' : 'disabled'}>⬇ 다운</button>
+          <button data-slot="${i}" data-act="download">⬇ 다운</button>
           <label>
             ⬆ 업로드
             <input type="file" data-slot="${i}" data-act="upload" accept=".sav,.SAV">
