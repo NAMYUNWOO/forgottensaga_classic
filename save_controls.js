@@ -197,7 +197,6 @@ const SaveControls = (() => {
   async function downloadSlot(slotIdx) {
     // Lua → JS bridge — F2-F6 (slot 1-5) 또는 F7 (slot 0=seed) 키 dispatch.
     // Lua 가 받아 sav 를 base64 print → index.html 의 Module.print 가 blob 으로 download.
-    // emscripten IDBFS sync timing 무관하게 game runtime 의 최신 sav read.
     const FN_KEY_MAP = {
       0: { key: 'F7',  code: 'F7',  keyCode: 118 },
       1: { key: 'F2',  code: 'F2',  keyCode: 113 },
@@ -209,18 +208,32 @@ const SaveControls = (() => {
     const def = FN_KEY_MAP[slotIdx];
     if (!def) { status(`Slot ${slotIdx}: 미지원 slot`, 'error'); return; }
     status(`Slot ${slotIdx}: 다운로드 준비 중... (게임에서 sav read)`, '');
-    const canvas = document.getElementById('canvas') || window;
-    const evd = new KeyboardEvent('keydown', {
-      key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
-      bubbles: true, cancelable: true,
-    });
-    canvas.dispatchEvent(evd);
-    const evu = new KeyboardEvent('keyup', {
-      key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
-      bubbles: true, cancelable: true,
-    });
-    canvas.dispatchEvent(evu);
-    // 결과는 Lua 의 print 가 Module.print (index.html) 으로 forward → triggerSavDownload
+    const canvas = document.getElementById('canvas');
+    if (!canvas) { status('canvas 없음', 'error'); return; }
+    // 1. canvas focus — SDL2 keyboard listener 가 canvas focus 요구하는 빌드 호환.
+    try { canvas.focus(); } catch (e) {}
+    // 2. dispatch 를 다양한 target 에 — canvas / document / window. love.js fork 마다
+    //    listener 위치 달라 모두에 dispatch (bubbles:true 라 ancestor 도 받지만 일부
+    //    빌드는 capture phase 만 listen — 직접 dispatch 가 안전).
+    const targets = [canvas, document, window];
+    for (const target of targets) {
+      const evd = new KeyboardEvent('keydown', {
+        key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+        bubbles: true, cancelable: true,
+      });
+      target.dispatchEvent(evd);
+    }
+    // keyup 도 동일하게
+    setTimeout(function() {
+      for (const target of targets) {
+        const evu = new KeyboardEvent('keyup', {
+          key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+          bubbles: true, cancelable: true,
+        });
+        target.dispatchEvent(evu);
+      }
+    }, 50);
+    console.log('[SaveControls] download dispatch:', def.key, 'for slot', slotIdx);
   }
 
   // SessionStorage key — page reload 시 Module.preRun 가 읽음.
