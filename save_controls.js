@@ -236,22 +236,18 @@ const SaveControls = (() => {
     try {
       const buf = await file.arrayBuffer();
       const u8  = new Uint8Array(buf);
-      // 1. IDBFS 에 직접 write — page reload 후 mount 시 reconcile 로 사라질 위험
-      //    있지만 일단 시도 (game 이 mount 시 IDBFS→MEMFS populate 하면 살아남음)
-      if (await detectDB()) {
-        try { await idbWrite(path, u8); } catch (e) { console.warn('idbWrite fail:', e); }
-      }
-      // 2. SessionStorage 에 base64 encoded 로 저장 — page reload 시 Module.preRun 이
-      //    읽어서 Module.FS_createDataFile 으로 MEMFS 에 inject. MEMFS 에 들어가면
-      //    syncfs(false) 시 IDBFS 에 sync 되어 영속.
+      // 직접 IDBFS write 는 제거 — emscripten IDBFS 의 reconcile 가 우리 file entry
+      // 의 parent dir entry 부재로 load fail → mount hang. 대신 SessionStorage 만
+      // 사용해서 preRun 단계에서 MEMFS 에 inject (Module.FS 노출된 빌드만 유효).
       try {
         const pending = JSON.parse(sessionStorage.getItem(PENDING_UPLOAD_KEY) || '[]');
         pending.push({ path: path, b64: uint8ToBase64(u8) });
         sessionStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
       } catch (e) {
-        console.warn('sessionStorage 저장 실패 (용량 제한?):', e);
+        status(`Slot ${slotIdx} 업로드 실패: ${e.message}`, 'error');
+        return;
       }
-      status(`Slot ${slotIdx}: 업로드 완료 (${u8.length} byte). 페이지를 새로고침하세요 — 게임 시작 시 MEMFS 에 inject.`, 'success');
+      status(`Slot ${slotIdx}: 업로드 (${u8.length} byte). 페이지 새로고침 후 게임 안에서 ${slotIdx}번 슬롯 load.`, 'success');
       await renderSlots();
     } catch (e) {
       status(`Slot ${slotIdx} 업로드 실패: ${e.message}`, 'error');
