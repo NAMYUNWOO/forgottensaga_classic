@@ -206,6 +206,11 @@
         font-size: 12px;
         flex: 1;
     }
+    /* 모바일: 키보드 textbox 를 화면 아래 (canvas 밑, aux row 위) 로 이동 */
+    #mobile-ime.visible {
+        top: auto;
+        bottom: 250px;  /* aux row (bottom 196 + 40 = 236) 위 14px gap */
+    }
 }
 
 /* 데스크톱: 키패드 hide */
