@@ -4,16 +4,16 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510023956"></script>
+    <script src="coi-serviceworker.js?v=20260510024211"></script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=overlays-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510023956">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510023956">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510023956">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510023956">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510024211">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510024211">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510024211">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510024211">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -525,28 +525,57 @@
         },
       };
       Module.setStatus('자산 다운로드 중...');
-      // onerror — error message 를 splash substatus 에 표시 (사용자가 mobile console
-      // 못 봐도 어떤 에러인지 화면에서 인지). 단 한 번만 (loop 방지).
+      // 모바일 자동 진단 — error 발생 시 sessionStorage 에 저장 + 다음 진입 때 표시.
+      // 사용자가 console 못 봐도 화면에서 직전 error 확인 가능.
+      function persistError(label, info) {
+        try {
+          if (typeof sessionStorage === 'undefined') return;
+          sessionStorage.setItem('love2d_last_error', JSON.stringify({
+            label: label, info: String(info).slice(0, 300),
+            ua: navigator.userAgent.slice(0, 120),
+            ts: Date.now(),
+          }));
+        } catch (e) {}
+      }
+      // 페이지 진입 시 직전 error 표시 (이전 reload 가 fail 한 경우)
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          var prevErr = sessionStorage.getItem('love2d_last_error');
+          if (prevErr) {
+            var pe = JSON.parse(prevErr);
+            var sub = document.getElementById('splash-substatus');
+            if (sub && (Date.now() - pe.ts) < 60000) {  // 1분 내 error 만
+              sub.style.color = '#ffaa66';
+              sub.textContent = '직전 ' + pe.label + ': ' + pe.info.slice(0, 150);
+            }
+            sessionStorage.removeItem('love2d_last_error');
+          }
+        }
+      } catch (e) {}
+
+      // onerror — error message 를 splash substatus 에 표시 + sessionStorage 저장.
       window.onerror = function(message, source, lineno, colno, error) {
         try {
           var info = String(message || '');
           if (lineno) info += ' @' + lineno + ':' + (colno || 0);
+          if (error && error.stack) info += '\n' + error.stack.split('\n')[0];
+          persistError('JS Error', info);
           var sub = document.getElementById('splash-substatus');
           if (sub) {
             sub.style.color = '#ff8888';
             sub.textContent = '오류: ' + info.slice(0, 200);
           }
-          Module.setStatus('JS 오류 발생 (위 메시지 참조)');
+          Module.setStatus('JS 오류 (위 메시지 참조)');
         } catch (e) {}
-        // 추가 error 무시 (loop 방지)
         Module.setStatus = function(text) {
           if (text) try { Module.printErr('[post-exception] ' + text); } catch (e) {}
         };
       };
-      // unhandled promise rejection 도 같은 path 으로
       window.addEventListener('unhandledrejection', function(ev) {
         try {
           var info = String(ev.reason || 'unhandled');
+          if (ev.reason && ev.reason.stack) info += '\n' + ev.reason.stack.split('\n')[0];
+          persistError('Promise', info);
           var sub = document.getElementById('splash-substatus');
           if (sub) {
             sub.style.color = '#ffaa66';
@@ -557,9 +586,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510023956"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510023956"></script>
-    <script type="text/javascript" src="game.js?v=20260510023956"></script>
-    <script async type="text/javascript" src="love.js?v=20260510023956" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510024211"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510024211"></script>
+    <script type="text/javascript" src="game.js?v=20260510024211"></script>
+    <script async type="text/javascript" src="love.js?v=20260510024211" onload="applicationLoad(this)"></script>
   </body>
 </html>
