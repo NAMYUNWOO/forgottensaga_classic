@@ -79,6 +79,52 @@
         margin-top: 8px;
         min-height: 1.2em;
       }
+
+      /* Audio prompt — 브라우저 autoplay 정책으로 첫 user gesture 전엔 사운드 silent.
+       * splash 후 표시되어 사용자 클릭 받으면 AudioContext.resume() 으로 활성. */
+      #audio-prompt {
+        position: fixed; inset: 0;
+        z-index: 180;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+        font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+        cursor: pointer;
+        transition: opacity 0.3s;
+        animation: ap-fadein 0.3s ease-out;
+      }
+      #audio-prompt.hidden { opacity: 0; pointer-events: none; }
+      #audio-prompt .ap-card {
+        background: rgba(20, 20, 30, 0.96);
+        border: 3px solid rgba(255, 213, 102, 0.7);
+        border-radius: 14px;
+        padding: 32px 40px;
+        text-align: center;
+        color: #ffd566;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+        animation: ap-pulse 1.6s ease-in-out infinite;
+      }
+      #audio-prompt .ap-icon {
+        font-size: 3.5em;
+        margin-bottom: 14px;
+      }
+      #audio-prompt .ap-text {
+        font-size: 1.1em;
+        line-height: 1.5;
+        color: #fff;
+      }
+      #audio-prompt .ap-sub {
+        font-size: 0.85em;
+        color: #aaa;
+        margin-top: 8px;
+      }
+      @keyframes ap-fadein {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes ap-pulse {
+        0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 0 0 rgba(255, 213, 102, 0.5); }
+        50%      { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 0 14px rgba(255, 213, 102, 0); }
+      }
     </style>
   </head>
   <body>
@@ -92,6 +138,16 @@
         <div id="splash-spinner"></div>
         <div id="splash-text">로딩 중...</div>
         <div id="splash-substatus">자산 다운로드 중...</div>
+      </div>
+
+      <!-- Audio prompt: splash 후 표시. 사용자 클릭으로 AudioContext.resume() →
+           브라우저 autoplay 정책 회피. 클릭 후 hide. -->
+      <div id="audio-prompt" class="hidden">
+        <div class="ap-card">
+          <div class="ap-icon">🔊</div>
+          <div class="ap-text">사운드 활성을 위해<br>여기를 클릭하세요</div>
+          <div class="ap-sub">브라우저 정책으로 사용자 입력 후 사운드 재생 가능</div>
+        </div>
       </div>
 
       <!-- 우상단 controls — PC + mobile 둘 다 표시 (mobile 에선 키패드 위 row 로 이동) -->
@@ -153,9 +209,38 @@
         if (s) {
           s.classList.add('hidden');
           // transition 끝나면 DOM 제거 (mobile-input 등 z-index 충돌 방지)
-          setTimeout(function() { if (s.parentNode) s.parentNode.removeChild(s); }, 400);
+          setTimeout(function() {
+            if (s.parentNode) s.parentNode.removeChild(s);
+            // Audio prompt 표시 — autoUnlocked 면 skip
+            if (!window.__audioUnlocked) {
+              var ap = document.getElementById('audio-prompt');
+              if (ap) ap.classList.remove('hidden');
+            }
+          }, 400);
         }
       }
+      // Audio context unlock — 사용자 첫 gesture (click/touch/key) 후 호출.
+      // AudioContext.resume() + audio prompt hide. 단 1회만.
+      function unlockAudio() {
+        if (window.__audioUnlocked) return;
+        window.__audioUnlocked = true;
+        try {
+          if (window.Module && window.Module.SDL2 && window.Module.SDL2.audioContext) {
+            var ctx = window.Module.SDL2.audioContext;
+            if (ctx.state === 'suspended') ctx.resume();
+          }
+        } catch(e) {}
+        var ap = document.getElementById('audio-prompt');
+        if (ap) {
+          ap.classList.add('hidden');
+          setTimeout(function() { if (ap.parentNode) ap.parentNode.removeChild(ap); }, 400);
+        }
+      }
+      // Document-wide listener — splash 후에도 사용자가 prompt 안 보고 직접 게임에
+      // 입력하면 (조이스틱 등) 그 첫 gesture 로 audio unlock.
+      ['click', 'touchstart', 'keydown'].forEach(function(ev) {
+        document.addEventListener(ev, unlockAudio, { capture: true });
+      });
       // Lua side 에서 print() sentinel 보내면 splash hide.
       window.LOVE2D_BOOT_DONE_SENTINEL = "LOVE2D_BOOT_DONE";
 
