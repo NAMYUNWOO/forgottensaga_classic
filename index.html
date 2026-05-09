@@ -4,16 +4,16 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510013437"></script>
+    <script src="coi-serviceworker.js?v=20260510013812"></script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510013437">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510013437">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510013437">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510013437">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510013812">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510013812">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510013812">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510013812">
     <style>
       body { margin: 0; padding: 0; overflow: hidden; background: #000; }
       #canvas { display: block; margin: 0 auto; outline: none; }
@@ -301,9 +301,13 @@
       // emscripten IDBFS 의 reconcile 동작 (MEMFS = source-of-truth) 을 우회 위해
       // game runtime 의 MEMFS 에 직접 file 생성 → syncfs(false) 시 IDBFS 에 sync.
       function preRunInjectUploads() {
+        // sessionStorage 즉시 clear — 실패해도 다음 reload 에 반복 안 시킴 (loop 방지).
+        var raw = sessionStorage.getItem('love2d_pending_uploads');
+        if (!raw) return;
+        sessionStorage.removeItem('love2d_pending_uploads');
         console.log('[preRun] called, Module keys:', Object.keys(Module).slice(0, 30));
         try {
-          var pending = JSON.parse(sessionStorage.getItem('love2d_pending_uploads') || '[]');
+          var pending = JSON.parse(raw);
           console.log('[preRun] pending count:', pending.length);
           if (!pending.length) return;
           for (var i = 0; i < pending.length; i++) {
@@ -337,7 +341,6 @@
               console.warn('[preRun] inject 실패:', item.path, e);
             }
           }
-          sessionStorage.removeItem('love2d_pending_uploads');
         } catch (e) {
           console.warn('[preRun] pending uploads 처리 오류:', e);
         }
@@ -407,9 +410,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510013437"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510013437"></script>
-    <script type="text/javascript" src="game.js?v=20260510013437"></script>
-    <script async type="text/javascript" src="love.js?v=20260510013437" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510013812"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510013812"></script>
+    <script type="text/javascript" src="game.js?v=20260510013812"></script>
+    <script async type="text/javascript" src="love.js?v=20260510013812" onload="applicationLoad(this)"></script>
   </body>
 </html>
