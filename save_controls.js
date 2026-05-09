@@ -139,10 +139,24 @@ const SaveControls = (() => {
     return new Promise((res, rej) => {
       const tx = db.transaction([_storeName], 'readwrite');
       const store = tx.objectStore(_storeName);
+      // Parent directory entries 도 put — emscripten IDBFS reconcile 가 file 만
+      // 보면 parent dir 부재로 차단. directory entry = mode 16877 (S_IFDIR | 0755),
+      // contents 없음 (또는 빈 Uint8Array).
+      const parts = path.split('/').filter(s => s.length > 0);
+      const now = new Date();
+      let cur = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        cur += '/' + parts[i];
+        store.put({
+          mode: 16877,             // S_IFDIR | 0755
+          timestamp: now,
+        }, cur);
+      }
+      // File entry
       const value = {
         contents: u8,
-        mode: 33188,            // S_IFREG | 0644
-        timestamp: new Date(),
+        mode: 33188,               // S_IFREG | 0644
+        timestamp: now,
       };
       const r = store.put(value, path);
       r.onsuccess = () => { db.close(); res(); };
@@ -244,18 +258,24 @@ const SaveControls = (() => {
     try {
       const buf = await file.arrayBuffer();
       const u8  = new Uint8Array(buf);
-      // 직접 IDBFS write 는 제거 — emscripten IDBFS 의 reconcile 가 우리 file entry
-      // 의 parent dir entry 부재로 load fail → mount hang. 대신 SessionStorage 만
-      // 사용해서 preRun 단계에서 MEMFS 에 inject (Module.FS 노출된 빌드만 유효).
+      // 1. IDBFS 직접 write (parent dir entries 포함) — page reload 시 emscripten
+      //    이 IDBFS → MEMFS load 하므로 영속.
+      let idbOK = false;
+      if (await detectDB()) {
+        try { await idbWrite(path, u8); idbOK = true; }
+        catch (e) { console.warn('idbWrite fail:', e); }
+      }
+      // 2. SessionStorage 에 base64 저장 — preRun MEMFS inject 의 fallback
+      //    (현 page 에서 reload 없이도 이후 reload 의 MEMFS 에 inject).
       try {
         const pending = JSON.parse(sessionStorage.getItem(PENDING_UPLOAD_KEY) || '[]');
         pending.push({ path: path, b64: uint8ToBase64(u8) });
         sessionStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
-      } catch (e) {
-        status(`Slot ${slotIdx} 업로드 실패: ${e.message}`, 'error');
-        return;
-      }
-      status(`Slot ${slotIdx}: 업로드 (${u8.length} byte). 페이지 새로고침 후 게임 안에서 ${slotIdx}번 슬롯 load.`, 'success');
+      } catch (e) { /* sessionStorage quota exceed — IDBFS 가 main path 면 OK */ }
+      const note = idbOK
+        ? '페이지 새로고침 후 게임에서 load slot 사용 가능. 영속 OK.'
+        : '페이지 새로고침 후 일회성 inject (영속 X — IDBFS 검출 실패).';
+      status(`Slot ${slotIdx}: 업로드 (${u8.length} byte). ${note}`, 'success');
       await renderSlots();
     } catch (e) {
       status(`Slot ${slotIdx} 업로드 실패: ${e.message}`, 'error');
