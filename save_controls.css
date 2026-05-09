@@ -1,0 +1,122 @@
+/* Save 다운로드/업로드 패널 (love.js IDBFS) */
+
+#save-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 320px; max-height: 100vh;
+    overflow-y: auto;
+    background: rgba(20, 20, 30, 0.95);
+    color: #f0f0f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    border-left: 2px solid rgba(200, 200, 220, 0.3);
+    padding: 16px;
+    z-index: 200;
+    transition: transform 0.25s ease-out;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.4);
+}
+#save-panel.hidden { transform: translateX(100%); }
+
+#save-panel h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffd566;
+}
+#save-panel .close-btn {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: none; border: 0;
+    color: #aaa;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+#save-panel .slot {
+    background: rgba(60, 60, 80, 0.4);
+    border: 1px solid rgba(150, 150, 170, 0.3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+#save-panel .slot-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #cce0ff;
+    display: flex; justify-content: space-between; align-items: baseline;
+}
+#save-panel .slot-meta {
+    font-size: 11px;
+    color: #aaa;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+#save-panel .slot-actions {
+    display: flex; gap: 8px;
+}
+#save-panel .slot-actions button,
+#save-panel .slot-actions label {
+    flex: 1;
+    background: rgba(100, 130, 180, 0.5);
+    color: #fff;
+    border: 1px solid rgba(150, 180, 220, 0.4);
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    transition: background 0.15s;
+}
+#save-panel .slot-actions button:hover,
+#save-panel .slot-actions label:hover {
+    background: rgba(120, 160, 220, 0.7);
+}
+#save-panel .slot-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+#save-panel .slot-actions input[type="file"] {
+    display: none;
+}
+#save-panel .slot-actions .delete {
+    flex: 0 0 auto;
+    background: rgba(160, 80, 80, 0.5);
+    border-color: rgba(200, 100, 100, 0.4);
+}
+
+#save-panel-toggle {
+    position: fixed;
+    top: 14px; right: 14px;
+    z-index: 199;
+    background: rgba(40, 40, 60, 0.7);
+    color: #ffd566;
+    border: 2px solid rgba(200, 200, 220, 0.5);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+#save-panel-toggle:hover { background: rgba(80, 80, 120, 0.8); }
+
+/* 모바일: 캔버스 위가 아닌 키패드 위 우측 row 로 이동 (한글입력 + 전체화면 옆) */
+@media (pointer: coarse), (max-width: 1024px) {
+    #save-panel-toggle {
+        top: auto;
+        right: 14px;
+        bottom: 196px;
+        height: 40px;
+        padding: 0 12px;
+    }
+}
+
+#save-status {
+    margin-top: 12px;
+    padding: 8px;
+    background: rgba(40, 40, 50, 0.6);
+    border-radius: 6px;
+    font-size: 11px;
+    color: #aaa;
+    min-height: 16px;
+}
+#save-status.success { color: #80ff80; }
+#save-status.error   { color: #ff8080; }

@@ -1,0 +1,166 @@
+/* 모바일 가상 키패드 + IME — Forgotten Saga (love.js)
+ *
+ * Layout (모바일 가로 권장):
+ *   좌하단: D-pad (4 방향, 큰 영역)
+ *   우하단: Space (확인) / Esc (취소) / Enter (메뉴)
+ *   우상단: IME 토글 (한글 입력) / Save 토글
+ *
+ * 데스크톱 (마우스 + 키보드) 시 자동 숨김 (touch 이벤트 없으면 비표시).
+ */
+
+#mobile-input {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+#mobile-input.hidden { display: none; }
+
+#mobile-input button,
+#mobile-input .btn {
+    pointer-events: auto;
+    background: rgba(40, 40, 60, 0.55);
+    border: 2px solid rgba(200, 200, 220, 0.6);
+    color: #f0f0f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    font-weight: bold;
+    border-radius: 12px;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.05s, background 0.1s;
+}
+#mobile-input button:active,
+#mobile-input .btn.pressed {
+    background: rgba(120, 160, 220, 0.7);
+    transform: scale(0.92);
+}
+
+/* === Joystick (좌하단) — 4방향 키보드 입력 emulation === */
+#mobile-input .joystick {
+    position: absolute;
+    left: 14px; bottom: 14px;
+    width: 168px; height: 168px;
+    pointer-events: auto;
+    touch-action: none;  /* 브라우저 touch scroll 차단 */
+}
+#mobile-input .joystick-base {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(40, 40, 60, 0.45);
+    border: 2px solid rgba(200, 200, 220, 0.55);
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.3);
+}
+#mobile-input .joystick-knob {
+    position: absolute;
+    width: 64px; height: 64px;
+    left: 52px; top: 52px;  /* (168-64)/2 = 52 — base 중심 */
+    border-radius: 50%;
+    background: rgba(120, 160, 220, 0.75);
+    border: 2px solid rgba(220, 220, 240, 0.85);
+    pointer-events: none;
+    transition: transform 0.06s ease-out;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+#mobile-input .joystick.active .joystick-base {
+    background: rgba(60, 80, 110, 0.55);
+}
+
+/* === Action 버튼 (우하단) ===
+ * Layout:        esc
+ *           space   enter
+ */
+#mobile-input .actions {
+    position: absolute;
+    right: 14px; bottom: 14px;
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+}
+#mobile-input .actions .row {
+    display: flex; gap: 10px; justify-content: center;
+}
+#mobile-input .actions .btn {
+    width: 78px; height: 60px;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+}
+#mobile-input .actions .esc   { background: rgba(160, 80, 80, 0.6); }
+#mobile-input .actions .space { background: rgba(80, 140, 80, 0.6); }
+#mobile-input .actions .enter { background: rgba(80, 110, 160, 0.6); }
+
+/* === 우상단 (IME / Save toggle) === */
+#mobile-input .top-right {
+    position: absolute;
+    right: 14px; top: 14px;
+    display: flex; gap: 10px;
+}
+#mobile-input .top-right .btn {
+    width: 64px; height: 36px;
+    font-size: 13px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+}
+
+/* === IME input (모바일 가상 키보드 trigger + PC 한국어 입력 visible textbox) ===
+ * 기본은 hidden — focus 시 모바일은 가상 키보드 띄움. PC 는 시각 변화 X 라 사용자가
+ * 입력 가능한지 모름 → .visible class 활성 시 화면 가운데 textbox 로 표시.
+ */
+#mobile-ime {
+    position: absolute;
+    top: -100px; left: -100px;
+    width: 1px; height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+#mobile-ime.visible {
+    position: fixed;
+    top: 24px; left: 50%;
+    transform: translateX(-50%);
+    width: min(320px, 80vw);
+    height: 40px;
+    opacity: 1;
+    pointer-events: auto;
+    background: rgba(255, 255, 255, 0.95);
+    color: #222;
+    border: 2px solid rgba(255, 213, 102, 0.85);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 16px;
+    z-index: 250;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    outline: none;
+}
+#btn-ime.active {
+    background: rgba(120, 160, 220, 0.75);
+    border-color: rgba(255, 213, 102, 0.9);
+}
+
+/* === 게임 캔버스 영역 — 모바일에서 키패드 + aux row 위로 안 가려지게 === */
+@media (pointer: coarse), (max-width: 1024px) {
+    /* .game-wrap 의 mobile 정의는 index.html 의 inline <style> 로 이전 — load 순서상
+     * mobile_input.css 가 inline 보다 먼저라 여기서 정의해도 inline 이 win. */
+    #canvas {
+        /* 키패드 영역 (bottom 14 + 168 height + aux row ~50) ≈ 240px + 상단 padding 44 */
+        max-width: 100vw;
+        max-height: calc(100vh - 284px);
+        width: auto;
+        height: auto;
+        display: block;
+    }
+    /* 모바일에선 한글입력 + 전체화면 을 캔버스 아래, 키패드 위 row 로 이동 */
+    #mobile-input .top-right {
+        top: auto;
+        right: auto;
+        left: 14px;
+        bottom: 196px;  /* 키패드 (bottom 14 + 168 = 182 끝) 위에 14 gap */
+    }
+    #mobile-input .top-right .btn {
+        height: 40px;
+    }
+}
+
+/* 데스크톱: 키패드 hide */
+@media (pointer: fine) and (min-width: 1025px) {
+    #mobile-input { display: none; }
+}
