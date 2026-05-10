@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510171949"></script>
+    <script src="coi-serviceworker.js?v=20260510172443"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510171949">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510171949">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510171949">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510171949">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510172443">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510172443">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510172443">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510172443">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -60,11 +60,13 @@
       /* Splash overlay — main.lua love.load() 동안 표시. CSS animation 은 별도 GPU
          pipeline 이라 Lua main thread block 시에도 spinner 회전 유지. */
       #splash-overlay {
-        position: absolute; inset: 0; z-index: 10;
+        /* fixed + 최상위 z-index — 로딩 중에는 모든 컨트롤러 (mobile-input z:100,
+         * top-right z:199, save-panel z:200) 위에 그려져 사용자 시선 차단 없음. */
+        position: fixed; inset: 0; z-index: 9999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         background: rgb(20, 20, 30); color: #fff;
         font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-        transition: opacity 0.3s; pointer-events: none;
+        transition: opacity 0.3s;
       }
       #splash-overlay.hidden { opacity: 0; pointer-events: none; }
       #splash-title {
@@ -816,7 +818,7 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510171949"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510172443"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -831,8 +833,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260510171949"></script>
-    <script type="text/javascript" src="game.js?v=20260510171949"></script>
-    <script async type="text/javascript" src="love.js?v=20260510171949" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510172443"></script>
+    <script type="text/javascript" src="game.js?v=20260510172443"></script>
+    <script async type="text/javascript" src="love.js?v=20260510172443" onload="applicationLoad(this)"></script>
   </body>
 </html>
