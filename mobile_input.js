@@ -117,32 +117,23 @@ const MobileInput = (() => {
     });
   }
 
-  // === Joystick — 4방향 키보드 입력 emulation ===
-  // touch / mouse drag 위치 → angle 으로 4 방향 (up/down/left/right) 중 하나만
-  // dispatch. 즉 키보드 한 번에 한 방향만 누른 것과 동일 (연속 vector 아님).
-  // deadzone 안에선 모든 방향 release. 다른 방향으로 변경 시 이전 keyup → 새 keydown.
-  // hold 시 OS 키보드처럼 키 repeat 자동 발생 (delay 후 interval).
+  // === Joystick — nipplejs 사용 (multi-touch / touchcancel / Pointer Events 검증된 lib) ===
+  // hand-rolled touch handler 가 multi-touch / ghost touch / stuck 이슈 발생 → nipplejs 로 교체.
+  // dir event 시 4 방향 keydown/keyup dispatch. hold 시 우리 repeat timer 로 OS keyrepeat 흉내.
   function installJoystick() {
-    const stick = document.getElementById('joystick');
-    const knob  = document.getElementById('joystick-knob');
-    if (!stick || !knob) return;
+    const zone = document.getElementById('joystick');
+    if (!zone) return;
+    if (typeof nipplejs === 'undefined') {
+      console.warn('[MobileInput] nipplejs 미로드 — joystick 비활성');
+      return;
+    }
+    const canvas = document.getElementById('canvas') || window;
+    const REPEAT_DELAY    = 400;
+    const REPEAT_INTERVAL = 110;
 
-    const KNOB_HALF = 32;        // knob 64x64 의 반
-    const MAX_DIST  = 50;        // knob 이 base 안에서 이동 가능한 max radius (px)
-    // Hysteresis: 끝부분에서 hold 해야 활성, 한번 활성 후엔 작은 버퍼까지 유지.
-    // 이전 deadzone 14 는 너무 예민해서 살짝 건드려도 keydown 발생.
-    const ACTIVATE_DIST = 38;    // 활성화 임계 (MAX_DIST 의 ~76%)
-    const RELEASE_DIST  = 22;    // 활성 후 release 임계 (~44%) — jitter 방지
-    const REPEAT_DELAY    = 400; // 첫 keydown 후 repeat 시작까지 (ms)
-    const REPEAT_INTERVAL = 110; // repeat 간격 (ms) — 메뉴 cursor 가 너무 빠르게 흐르지
-                                 // 않도록 OS keyrepeat (~30ms) 보다 낮춤. 약 9 Hz.
-
-    let active   = false;
-    let centerX  = 0, centerY = 0;
-    let curDir   = null;
+    let curDir = null;
     let repeatTimer = null;
     let repeatInterval = null;
-    const canvas = document.getElementById('canvas') || window;
 
     function clearRepeat() {
       if (repeatTimer)    { clearTimeout(repeatTimer);   repeatTimer = null; }
@@ -150,8 +141,6 @@ const MobileInput = (() => {
     }
     function startRepeat(dir) {
       clearRepeat();
-      // OS keyrepeat 동작: 첫 keydown 후 delay → interval 마다 keydown 반복.
-      // KeyboardEvent.repeat=true 로 dispatch (love.js / SDL 의 isrepeat 매핑).
       repeatTimer = setTimeout(() => {
         repeatInterval = setInterval(() => {
           if (curDir !== dir) { clearRepeat(); return; }
@@ -178,69 +167,32 @@ const MobileInput = (() => {
       curDir = newDir;
     }
 
-    function update(dx, dy) {
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      // knob 위치: max 까지 clamp
-      let kx = dx, ky = dy;
-      if (dist > MAX_DIST) {
-        kx = dx * MAX_DIST / dist;
-        ky = dy * MAX_DIST / dist;
+    const stick = nipplejs.create({
+      zone: zone,
+      mode: 'static',
+      position: { left: '50%', top: '50%' },
+      size: 168,
+      threshold: 0.45,        // knob 이 radius 의 45% 이상 이동 시 dir 활성 (jitter 방지)
+      color: 'rgba(120, 160, 220, 0.75)',
+      fadeTime: 100,
+      restJoystick: true,     // touch 떼면 knob 가운데 복원
+      restOpacity: 0.5,
+    });
+
+    stick.on('dir', (evt, data) => {
+      // data.direction.angle: 'up' / 'down' / 'left' / 'right' (KEY_MAP 와 일치)
+      const dir = data && data.direction && data.direction.angle;
+      if (dir === 'up' || dir === 'down' || dir === 'left' || dir === 'right') {
+        setDir(dir);
       }
-      knob.style.transform = `translate(${kx}px, ${ky}px)`;
+    });
+    stick.on('end', () => { setDir(null); });
 
-      // Hysteresis threshold: 활성 안 됐으면 ACTIVATE 까지, 활성 됐으면 RELEASE 까지
-      // 유지. 끝까지 밀어야 처음 활성, 한번 활성 후엔 22 까지 풀려도 유지 → jitter X.
-      const threshold = curDir ? RELEASE_DIST : ACTIVATE_DIST;
-      if (dist < threshold) { setDir(null); return; }
-      // 4-way: angle 으로 가장 가까운 방향. atan2 의 좌표는 화면 (y 아래 양수).
-      //   right: -π/4 ~ π/4
-      //   down:  π/4 ~ 3π/4
-      //   left:  3π/4 ~ π or -π ~ -3π/4
-      //   up:    -3π/4 ~ -π/4
-      const a = Math.atan2(dy, dx);
-      const PI = Math.PI;
-      let dir;
-      if (a >= -PI/4 && a < PI/4)        dir = 'right';
-      else if (a >= PI/4 && a < 3*PI/4)  dir = 'down';
-      else if (a >= -3*PI/4 && a < -PI/4) dir = 'up';
-      else                                dir = 'left';
-      setDir(dir);
-    }
-
-    function start(ev) {
-      ev.preventDefault();
-      const t = ev.touches ? ev.touches[0] : ev;
-      const rect = stick.getBoundingClientRect();
-      centerX = rect.left + rect.width / 2;
-      centerY = rect.top  + rect.height / 2;
-      active  = true;
-      stick.classList.add('active');
-      update(t.clientX - centerX, t.clientY - centerY);
-    }
-    function move(ev) {
-      if (!active) return;
-      ev.preventDefault();
-      const t = ev.touches ? ev.touches[0] : ev;
-      update(t.clientX - centerX, t.clientY - centerY);
-    }
-    function end(ev) {
-      if (!active) return;
-      if (ev && ev.preventDefault) ev.preventDefault();
-      active = false;
-      stick.classList.remove('active');
-      knob.style.transform = '';
-      setDir(null);
-    }
-
-    // touch 우선
-    stick.addEventListener('touchstart',  start, { passive: false });
-    stick.addEventListener('touchmove',   move,  { passive: false });
-    stick.addEventListener('touchend',    end,   { passive: false });
-    stick.addEventListener('touchcancel', end,   { passive: false });
-    // 데스크톱 디버그용 mouse
-    stick.addEventListener('mousedown', start);
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup',   end);
+    // 페이지 hidden / blur 시 stuck 방지 — 모든 active 키 release
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) setDir(null);
+    });
+    window.addEventListener('blur', () => setDir(null));
   }
 
   function install() {
