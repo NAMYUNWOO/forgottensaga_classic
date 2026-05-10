@@ -170,6 +170,18 @@ const SaveControls = (() => {
   }
 
   async function readSlotMeta(slotIdx) {
+    // 1순위: localStorage 의 사용자 업로드 sav (Safari 도 호환).
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
+        if (raw) {
+          const item = JSON.parse(raw);
+          const size = atob(item.b64).length;
+          return { exists: true, size: size, name: '(업로드)', mtime: '', source: 'localStorage' };
+        }
+      }
+    } catch (e) {}
+    // 2순위: IDBFS read (게임 sav, syncfs 가 됐어야 함)
     const dir = getSaveDir();
     if (!dir) return { exists: false };
     const path = dir + '/' + SLOT_FILES[slotIdx - 1];
@@ -183,22 +195,39 @@ const SaveControls = (() => {
         name += String.fromCharCode(data[i]);
       }
       let date = '';
-      if (entry.timestamp instanceof Date) {
-        date = entry.timestamp.toLocaleString();
-      } else if (typeof entry.timestamp === 'number') {
-        date = new Date(entry.timestamp).toLocaleString();
-      }
-      return { exists: true, size: data.length, name: name || '(이름 없음)', mtime: date };
+      if (entry.timestamp instanceof Date) date = entry.timestamp.toLocaleString();
+      else if (typeof entry.timestamp === 'number') date = new Date(entry.timestamp).toLocaleString();
+      return { exists: true, size: data.length, name: name || '(이름 없음)', mtime: date, source: 'IDBFS' };
     } catch (e) {
       return { exists: false };
     }
   }
 
   async function downloadSlot(slotIdx) {
-    // 두 path 시도:
-    //   1순위: Lua → JS bridge (F-key dispatch). 게임 진행 중 MEMFS 의 최신 sav.
-    //   2순위 (5초 timeout 후): IndexedDB direct read. game 종료 시 syncfs(false)
-    //          가 IDBFS 에 저장한 sav. 단 syncfs 안 됐으면 stale.
+    // 3-tier path:
+    //   1순위: localStorage 의 사용자 업로드 sav (Safari/Chrome 모두 즉시 가능).
+    //   2순위: Lua → JS bridge (F-key dispatch). 게임 진행 중 MEMFS read.
+    //   3순위 (5초 timeout 후): IndexedDB direct read. game 종료 syncfs 후 stale.
+
+    // 1순위 — localStorage
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
+        if (raw) {
+          const item = JSON.parse(raw);
+          const bin = atob(item.b64);
+          const u8 = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          const filename = SLOT_FILES[slotIdx - 1] || ('saga0' + slotIdx + '.sav');
+          const blob = new Blob([u8], { type: 'application/octet-stream' });
+          triggerBlobDownload(blob, filename);
+          status(`Slot ${slotIdx} (업로드본): 다운로드 (${u8.length} byte)`, 'success');
+          return;
+        }
+      }
+    } catch (e) { console.warn('[downloadSlot] localStorage error:', e); }
+
+    // 2순위/3순위 — Lua bridge + IDBFS fallback (이하 기존 코드)
     const FN_KEY_MAP = {
       0: { key: 'F7',  code: 'F7',  keyCode: 118 },
       1: { key: 'F2',  code: 'F2',  keyCode: 113 },

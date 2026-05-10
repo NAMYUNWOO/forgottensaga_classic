@@ -4,16 +4,16 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510024211"></script>
+    <script src="coi-serviceworker.js?v=20260510094825"></script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=overlays-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510024211">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510024211">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510024211">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510024211">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510094825">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510094825">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510094825">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510094825">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -553,19 +553,22 @@
         }
       } catch (e) {}
 
-      // onerror — error message 를 splash substatus 에 표시 + sessionStorage 저장.
+      // onerror — error message 를 splash 에 표시 + sessionStorage 저장.
+      // splash-text 에 라벨, substatus 에 정확한 message (덮어쓰지 X).
       window.onerror = function(message, source, lineno, colno, error) {
         try {
-          var info = String(message || '');
+          var info = String(message || 'unknown');
           if (lineno) info += ' @' + lineno + ':' + (colno || 0);
-          if (error && error.stack) info += '\n' + error.stack.split('\n')[0];
+          if (error && error.stack) info += ' | ' + error.stack.split('\n')[0];
           persistError('JS Error', info);
+          var st = document.getElementById('splash-text');
+          if (st) { st.style.color = '#ff8888'; st.textContent = 'JS 오류 발생'; }
           var sub = document.getElementById('splash-substatus');
           if (sub) {
             sub.style.color = '#ff8888';
-            sub.textContent = '오류: ' + info.slice(0, 200);
+            sub.textContent = info.slice(0, 250);
           }
-          Module.setStatus('JS 오류 (위 메시지 참조)');
+          // Module.setStatus 무력화 — 위 메시지 덮어쓰지 못 하게.
         } catch (e) {}
         Module.setStatus = function(text) {
           if (text) try { Module.printErr('[post-exception] ' + text); } catch (e) {}
@@ -586,9 +589,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510024211"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510024211"></script>
-    <script type="text/javascript" src="game.js?v=20260510024211"></script>
-    <script async type="text/javascript" src="love.js?v=20260510024211" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510094825"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510094825"></script>
+    <script type="text/javascript" src="game.js?v=20260510094825"></script>
+    <script async type="text/javascript" src="love.js?v=20260510094825" onload="applicationLoad(this)"></script>
   </body>
 </html>
