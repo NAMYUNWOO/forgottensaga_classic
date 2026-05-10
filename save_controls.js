@@ -209,7 +209,7 @@ const SaveControls = (() => {
     //   2순위: Lua → JS bridge (F-key dispatch). 게임 진행 중 MEMFS read.
     //   3순위 (5초 timeout 후): IndexedDB direct read. game 종료 syncfs 후 stale.
 
-    // 1순위 — localStorage
+    // 1순위 — localStorage (사용자가 직접 업로드한 sav)
     try {
       if (typeof localStorage !== 'undefined') {
         const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
@@ -226,6 +226,33 @@ const SaveControls = (() => {
         }
       }
     } catch (e) { console.warn('[downloadSlot] localStorage error:', e); }
+
+    // 2순위 — emscripten 의 노출된 internal sync API 시도. game 이 자동 sync 안 함.
+    // Module 의 다양한 가능 export 시도 (빌드 옵션마다 노출 함수 다름).
+    try {
+      const M = window.Module;
+      if (M) {
+        // Lua bridge 전 — 혹시 노출된 syncfs 있으면 force sync
+        if (typeof M.FS_syncfs === 'function') {
+          await new Promise((res) => {
+            try { M.FS_syncfs(false, function() { res(); }); }
+            catch (e) { res(); }
+          });
+        } else if (M.FS && typeof M.FS.syncfs === 'function') {
+          await new Promise((res) => {
+            try { M.FS.syncfs(false, function() { res(); }); }
+            catch (e) { res(); }
+          });
+        }
+        // 또는 ccall 으로 emscripten C function 호출
+        try {
+          if (typeof M.ccall === 'function') {
+            // emscripten 의 자동 sync — 일부 빌드에 노출
+            try { M.ccall('emscripten_idbfs_save', null, [], []); } catch (e) {}
+          }
+        } catch (e) {}
+      }
+    } catch (e) { console.warn('[downloadSlot] sync attempt fail:', e); }
 
     // 2순위/3순위 — Lua bridge + IDBFS fallback (이하 기존 코드)
     const FN_KEY_MAP = {
