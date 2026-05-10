@@ -187,21 +187,41 @@
     bottom: 244px;
     left: 50%;
     transform: translateX(-50%);
-    pointer-events: none;
     background: rgba(40, 40, 60, 0.85);
     color: #ffd566;
     border: 2px solid rgba(255, 213, 102, 0.9);
     border-radius: 8px;
-    padding: 6px 14px;
+    padding: 6px 8px 6px 14px;
     font-size: 12px;
     text-align: center;
     z-index: 198;
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
     max-width: 90vw;
     white-space: nowrap;
+    align-items: center;
+    gap: 8px;
 }
-#browser-recommend.show { display: block; }
+#browser-recommend.show { display: inline-flex; }
 #browser-recommend strong { color: #fff; }
+#browser-recommend .br-text { pointer-events: none; }
+#browser-recommend .br-close {
+    background: transparent;
+    border: 0;
+    color: rgba(255, 213, 102, 0.85);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.1s, color 0.1s;
+}
+#browser-recommend .br-close:hover,
+#browser-recommend .br-close:active {
+    background: rgba(255, 213, 102, 0.2);
+    color: #fff;
+}
 
 /* === 게임 캔버스 영역 — 모바일에서 키패드 + aux row 위로 안 가려지게 === */
 @media (pointer: coarse), (max-width: 1024px) {
