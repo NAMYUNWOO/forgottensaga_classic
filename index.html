@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510165636"></script>
+    <script src="coi-serviceworker.js?v=20260510171042"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510165636">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510165636">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510165636">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510165636">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510171042">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510171042">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510171042">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510171042">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -170,18 +170,49 @@
         <button class="btn" id="btn-ime">키보드</button>
         <button class="btn" id="btn-fullscreen">전체화면</button>
         <button class="btn" id="btn-sound" title="사운드 ON/OFF">🔊 사운드</button>
-        <button class="btn" id="btn-save">💾 세이브</button>
+        <button class="btn" id="btn-save">⚙️ 설정</button>
       </div>
 
       <div id="save-panel" class="hidden">
         <button class="close-btn">✕</button>
-        <h2>세이브 슬롯 관리</h2>
-        <div id="save-slots"></div>
-        <div id="save-status">대기 중…</div>
-        <p style="font-size:11px;color:#888;margin-top:14px">
-          저장된 sav 는 브라우저 IndexedDB 에 보관됩니다.<br>
-          다운로드로 백업, 업로드로 복원 가능.
-        </p>
+        <h2>⚙️ 설정</h2>
+        <div class="tab-nav">
+          <button class="tab-btn tab-active" data-tab="saves">세이브파일관리</button>
+          <button class="tab-btn" data-tab="log">개발자로그</button>
+          <button class="tab-btn" data-tab="dmca">DMCA</button>
+        </div>
+
+        <div class="tab-pane tab-active" data-pane="saves">
+          <div id="save-slots"></div>
+          <div id="save-status">대기 중…</div>
+          <p class="hint">
+            저장된 sav 는 브라우저 IndexedDB 에 보관됩니다.<br>
+            다운로드로 백업, 업로드로 복원 가능.
+          </p>
+        </div>
+
+        <div class="tab-pane" data-pane="log">
+          <div class="log-toolbar">
+            <button id="log-clear">지우기</button>
+            <button id="log-copy">복사</button>
+            <span id="log-count"></span>
+          </div>
+          <pre id="log-output">(아직 로그 없음)</pre>
+        </div>
+
+        <div class="tab-pane" data-pane="dmca">
+          <div class="dmca-content">
+            <h3>포가튼사가 (Forgotten Saga, 1997)</h3>
+            <p class="dmca-sub">— 비공식 Love2D 포팅</p>
+            <p>본 프로젝트는 1997년 손노리(Sonnori)가 출시한 PC RPG <strong>"포가튼사가"</strong> 의 학술 / preservation 목적 비영리 비공식 포팅입니다. 원작자 및 저작권 보유자의 권리를 존중합니다.</p>
+            <p>원본 게임 자산 (<code>SAGA.BIN</code>, <code>*.MOB</code>, <code>*.PAL</code>, <code>*.FAM</code>, <code>*.SCP</code>, <code>*.SPB</code>, <code>*.DAT</code>, <code>*.WAV</code> 등) 의 저작권은 손노리(Sonnori) 또는 그 후속 권리자에게 있습니다.</p>
+            <p>권리자가 본 프로젝트의 takedown 을 요청하실 경우, 아래 contact 으로 알려주시면 즉시 모든 자산을 제거합니다.</p>
+            <p class="dmca-contact">
+              Contact: <a href="mailto:nyw8902@gmail.com">nyw8902@gmail.com</a><br>
+              GitHub: <a href="https://github.com/NAMYUNWOO/forgottensaga_classic" target="_blank" rel="noopener noreferrer">forgottensaga_classic</a>
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- 모바일 가상 키패드 (touch 디바이스에서만 표시, CSS 분기) -->
@@ -520,11 +551,27 @@
         }
       }
 
+      // 개발자로그 ring buffer (설정 모달 → 개발자로그 탭 에서 dump)
+      window.__logBuffer = window.__logBuffer || [];
+      window.__LOG_MAX = 500;
+      window.__logPush = function(text, isErr) {
+        try {
+          var s = (text == null) ? '' : String(text);
+          var ts = new Date().toISOString().slice(11, 19);
+          var line = '[' + ts + ']' + (isErr ? ' ERR' : '') + ' ' + s;
+          window.__logBuffer.push(line);
+          if (window.__logBuffer.length > window.__LOG_MAX) window.__logBuffer.shift();
+        } catch (e) {}
+      };
+
       var Module = {
         arguments: ["./game.love"],
         INITIAL_MEMORY: 268435456,
         preRun: [preRunInjectUploads],
-        printErr: console.error.bind(console),
+        printErr: function(text) {
+          window.__logPush(text, true);
+          console.error(text);
+        },
         // Lua print() 의 sentinel 감시.
         print: function(text) {
           var trimmed = (text || '').replace(/[\r\n]+$/, '').trim();
@@ -639,6 +686,8 @@
             }
             return;
           }
+          // sentinel 안 맞은 일반 print — buffer + 콘솔
+          window.__logPush(text, false);
           console.log(text);
         },
         canvas: (function() {
@@ -735,7 +784,7 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510165636"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510171042"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -750,8 +799,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260510165636"></script>
-    <script type="text/javascript" src="game.js?v=20260510165636"></script>
-    <script async type="text/javascript" src="love.js?v=20260510165636" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510171042"></script>
+    <script type="text/javascript" src="game.js?v=20260510171042"></script>
+    <script async type="text/javascript" src="love.js?v=20260510171042" onload="applicationLoad(this)"></script>
   </body>
 </html>

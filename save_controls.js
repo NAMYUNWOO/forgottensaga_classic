@@ -562,6 +562,72 @@ const SaveControls = (() => {
     });
   }
 
+  // === 탭 전환 + 개발자로그 렌더 ===
+  function getActiveTab() {
+    const active = document.querySelector('#save-panel .tab-btn.tab-active');
+    return active ? active.getAttribute('data-tab') : 'saves';
+  }
+
+  function setActiveTab(tabId) {
+    document.querySelectorAll('#save-panel .tab-btn').forEach((b) => {
+      b.classList.toggle('tab-active', b.getAttribute('data-tab') === tabId);
+    });
+    document.querySelectorAll('#save-panel .tab-pane').forEach((p) => {
+      p.classList.toggle('tab-active', p.getAttribute('data-pane') === tabId);
+    });
+    if (tabId === 'saves') renderSlots();
+    else if (tabId === 'log') renderLog();
+  }
+
+  function renderLog() {
+    const out = document.getElementById('log-output');
+    const cnt = document.getElementById('log-count');
+    if (!out) return;
+    const buf = (window.__logBuffer && window.__logBuffer.length) ? window.__logBuffer : null;
+    if (buf) {
+      out.textContent = buf.join('\n');
+      out.scrollTop = out.scrollHeight;
+    } else {
+      out.textContent = '(아직 로그 없음)';
+    }
+    if (cnt) cnt.textContent = (buf ? buf.length : 0) + ' 줄';
+  }
+
+  function installLogControls() {
+    const clearBtn = document.getElementById('log-clear');
+    const copyBtn = document.getElementById('log-copy');
+    if (clearBtn) {
+      clearBtn.onclick = () => {
+        if (window.__logBuffer) window.__logBuffer.length = 0;
+        renderLog();
+      };
+    }
+    if (copyBtn) {
+      copyBtn.onclick = async () => {
+        const buf = window.__logBuffer || [];
+        const txt = buf.join('\n');
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(txt);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = txt;
+            ta.style.cssText = 'position:fixed;top:-100px;left:-100px;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+          }
+          copyBtn.textContent = '복사됨';
+          setTimeout(() => { copyBtn.textContent = '복사'; }, 1500);
+        } catch (e) {
+          copyBtn.textContent = '복사 실패';
+          setTimeout(() => { copyBtn.textContent = '복사'; }, 1500);
+        }
+      };
+    }
+  }
+
   function install() {
     const toggle = document.getElementById('btn-save')
                 || document.getElementById('save-panel-toggle');  // 구버전 ID 호환
@@ -570,10 +636,36 @@ const SaveControls = (() => {
     if (toggle && panel) {
       toggle.onclick = () => {
         panel.classList.toggle('hidden');
-        if (!panel.classList.contains('hidden')) renderSlots();
+        if (!panel.classList.contains('hidden')) {
+          // 패널 열림 — 현재 활성 탭 기준으로 렌더 (default: saves)
+          setActiveTab(getActiveTab());
+        }
       };
     }
     if (close && panel) close.onclick = () => panel.classList.add('hidden');
+
+    // 탭 nav 클릭 핸들러
+    document.querySelectorAll('#save-panel .tab-btn').forEach((b) => {
+      b.onclick = () => setActiveTab(b.getAttribute('data-tab'));
+    });
+
+    // 모달 외부 클릭 — 닫기 (단 panel 자체나 토글 버튼 클릭은 제외)
+    document.addEventListener('click', (e) => {
+      if (!panel || panel.classList.contains('hidden')) return;
+      if (panel.contains(e.target)) return;
+      if (toggle && toggle.contains(e.target)) return;
+      panel.classList.add('hidden');
+    });
+
+    // ESC 키 — 닫기
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && panel && !panel.classList.contains('hidden')) {
+        panel.classList.add('hidden');
+      }
+    });
+
+    installLogControls();
+
     console.log('[SaveControls] installed (IndexedDB direct access)');
     // 백그라운드 DB detection (panel 열기 전 미리)
     setTimeout(() => detectDB().then(name => {
