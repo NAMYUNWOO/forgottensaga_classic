@@ -169,8 +169,51 @@ const SaveControls = (() => {
     el.className = kind || '';
   }
 
+  // IndexedDB 별도 DB ('love2d_user_saves') 의 모든 entries read — async helper.
+  function _readUserSavesDB() {
+    return new Promise(function(res) {
+      try {
+        var req = indexedDB.open('love2d_user_saves', 1);
+        req.onupgradeneeded = function(e) {
+          var db = e.target.result;
+          if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves');
+        };
+        req.onsuccess = function(e) {
+          var db = e.target.result;
+          try {
+            if (!db.objectStoreNames.contains('saves')) { db.close(); res({}); return; }
+            var tx = db.transaction(['saves'], 'readonly');
+            var store = tx.objectStore('saves');
+            var allReq = store.getAll();
+            var keysReq = store.getAllKeys();
+            var map = {};
+            tx.oncomplete = function() {
+              for (var i = 0; i < keysReq.result.length; i++) {
+                try { map[keysReq.result[i]] = JSON.parse(allReq.result[i]); } catch (e) {}
+              }
+              db.close();
+              res(map);
+            };
+            tx.onerror = function() { db.close(); res({}); };
+          } catch (er) { db.close(); res({}); }
+        };
+        req.onerror = function() { res({}); };
+        setTimeout(function() { res({}); }, 3000);
+      } catch (e) { res({}); }
+    });
+  }
+
   async function readSlotMeta(slotIdx) {
-    // 1순위: localStorage 의 사용자 업로드 sav (Safari 도 호환).
+    // 1순위: IndexedDB 'love2d_user_saves' (게임 안 자동저장 + 모바일 호환)
+    try {
+      const userSaves = await _readUserSavesDB();
+      const item = userSaves['slot_' + slotIdx];
+      if (item && item.b64) {
+        const size = atob(item.b64).length;
+        return { exists: true, size: size, name: '(자동저장)', mtime: '', source: 'user_saves_db' };
+      }
+    } catch (e) {}
+    // 2순위: localStorage 의 사용자 업로드 sav (Safari 도 호환).
     try {
       if (typeof localStorage !== 'undefined') {
         const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
@@ -209,18 +252,34 @@ const SaveControls = (() => {
     //   2순위: Lua → JS bridge (F-key dispatch). 게임 진행 중 MEMFS read.
     //   3순위 (5초 timeout 후): IndexedDB direct read. game 종료 syncfs 후 stale.
 
-    // 1순위 — localStorage (사용자가 직접 업로드한 sav)
+    function _bin2u8(b64) {
+      const bin = atob(b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return u8;
+    }
+    const filename0 = SLOT_FILES[slotIdx - 1] || ('saga0' + slotIdx + '.sav');
+
+    // 1순위 — IndexedDB 'love2d_user_saves' (게임 안 자동저장 우선)
+    try {
+      const userSaves = await _readUserSavesDB();
+      const item = userSaves['slot_' + slotIdx];
+      if (item && item.b64) {
+        const u8 = _bin2u8(item.b64);
+        triggerBlobDownload(new Blob([u8], { type: 'application/octet-stream' }), filename0);
+        status(`Slot ${slotIdx} (자동저장): 다운로드 (${u8.length} byte)`, 'success');
+        return;
+      }
+    } catch (e) { console.warn('[downloadSlot] user_saves IDB error:', e); }
+
+    // 2순위 — localStorage (사용자가 직접 업로드한 sav)
     try {
       if (typeof localStorage !== 'undefined') {
         const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
         if (raw) {
           const item = JSON.parse(raw);
-          const bin = atob(item.b64);
-          const u8 = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-          const filename = SLOT_FILES[slotIdx - 1] || ('saga0' + slotIdx + '.sav');
-          const blob = new Blob([u8], { type: 'application/octet-stream' });
-          triggerBlobDownload(blob, filename);
+          const u8 = _bin2u8(item.b64);
+          triggerBlobDownload(new Blob([u8], { type: 'application/octet-stream' }), filename0);
           status(`Slot ${slotIdx} (업로드본): 다운로드 (${u8.length} byte)`, 'success');
           return;
         }
