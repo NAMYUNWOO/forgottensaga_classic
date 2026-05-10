@@ -61,6 +61,12 @@ const MobileInput = (() => {
     const ime = document.getElementById('mobile-ime');
     if (!ime) return;
     let composing = false;
+    // textbox 안 텍스트는 사용자 시각 확인 용으로 누적 visible — 게임으로 forward 한
+    // 부분의 길이만 추적해서 새 char 만 forward (이전 글자 중복 forward 방지).
+    let lastForwardedLen = 0;
+    // textbox 자체 reset helper — IME 토글 시 외부에서도 호출 가능하게 attach.
+    ime._resetForwardState = () => { lastForwardedLen = 0; };
+
     ime.addEventListener('compositionstart', () => { composing = true; });
     ime.addEventListener('compositionend', () => {
       composing = false;
@@ -72,21 +78,26 @@ const MobileInput = (() => {
     });
     function flushIme() {
       const value = ime.value;
-      if (!value) return;
+      // backspace 등으로 textbox 가 짧아짐 — lastForwardedLen sync (게임에 추가 forward X
+      // 게임 측 prompt 는 자체적으로 backspace 처리 — 여기서 게임에 인공적 backspace
+      // 보내지 않음. 사용자가 textbox 에서 지운 건 textbox 시각만 반영).
+      if (value.length < lastForwardedLen) {
+        lastForwardedLen = value.length;
+        return;
+      }
+      if (value.length === lastForwardedLen) return;
+      const newPart = value.substring(lastForwardedLen);
       const canvas = document.getElementById('canvas') || window;
-      // love2d 의 love.textinput callback 으로 forward.
-      // SDL Emscripten 가 InputEvent type 'textinput' 을 listen.
-      for (const ch of value) {
+      for (const ch of newPart) {
         const ev = new InputEvent('textinput', { data: ch, bubbles: true });
         canvas.dispatchEvent(ev);
-        // backup: love.js fork 에 따라 Module.SDL_TextInput 호출 필요할 수도
         if (window.Module && window.Module.ccall) {
           try {
             window.Module.ccall('emscripten_text_input', null, ['string'], [ch]);
           } catch (e) { /* ignore — fork 마다 다름 */ }
         }
       }
-      ime.value = '';
+      lastForwardedLen = value.length;
     }
   }
 
@@ -240,6 +251,7 @@ const MobileInput = (() => {
           ime.classList.add('visible');
           imeBtn.classList.add('active');
           ime.value = '';
+          if (ime._resetForwardState) ime._resetForwardState();
           // small delay → CSS transition 적용 후 focus (mobile 가상 키보드 trigger)
           setTimeout(() => ime.focus(), 30);
         }
