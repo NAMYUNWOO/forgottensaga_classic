@@ -204,23 +204,37 @@ const SaveControls = (() => {
   }
 
   async function readSlotMeta(slotIdx) {
+    // panel slot 1-based, SLOT_FILES 0-based — expectedFname 으로 path 매칭.
+    // (옛 매핑: key 가 0-based filename digit, 새 매핑: key 가 1-based slotIdx.
+    //  path 기반 lookup 이면 둘 다 호환.)
+    const expectedFname = SLOT_FILES[slotIdx - 1];
     // 1순위: IndexedDB 'love2d_user_saves' (게임 안 자동저장 + 모바일 호환)
     try {
       const userSaves = await _readUserSavesDB();
-      const item = userSaves['slot_' + slotIdx];
-      if (item && item.b64) {
-        const size = atob(item.b64).length;
-        return { exists: true, size: size, name: '(자동저장)', mtime: '', source: 'user_saves_db' };
+      for (const k in userSaves) {
+        const item = userSaves[k];
+        if (!item || !item.b64) continue;
+        const fname = (item.path || '').split('/').pop();
+        if (fname === expectedFname) {
+          const size = atob(item.b64).length;
+          return { exists: true, size: size, name: '(자동저장)', mtime: '', source: 'user_saves_db' };
+        }
       }
     } catch (e) {}
     // 2순위: localStorage 의 사용자 업로드 sav (Safari 도 호환).
     try {
       if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
-        if (raw) {
-          const item = JSON.parse(raw);
-          const size = atob(item.b64).length;
-          return { exists: true, size: size, name: '(업로드)', mtime: '', source: 'localStorage' };
+        for (let i = 0; i <= 6; i++) {
+          const raw = localStorage.getItem('love2d_upload_slot_' + i);
+          if (!raw) continue;
+          try {
+            const item = JSON.parse(raw);
+            const fname = (item.path || '').split('/').pop();
+            if (fname === expectedFname) {
+              const size = atob(item.b64).length;
+              return { exists: true, size: size, name: '(업로드)', mtime: '', source: 'localStorage' };
+            }
+          } catch (er) {}
         }
       }
     } catch (e) {}
@@ -260,28 +274,38 @@ const SaveControls = (() => {
     }
     const filename0 = SLOT_FILES[slotIdx - 1] || ('saga0' + slotIdx + '.sav');
 
-    // 1순위 — IndexedDB 'love2d_user_saves' (게임 안 자동저장 우선)
+    // 1순위 — IndexedDB 'love2d_user_saves' (path 기반: 옛/새 key 매핑 모두 호환)
     try {
       const userSaves = await _readUserSavesDB();
-      const item = userSaves['slot_' + slotIdx];
-      if (item && item.b64) {
-        const u8 = _bin2u8(item.b64);
-        triggerBlobDownload(new Blob([u8], { type: 'application/octet-stream' }), filename0);
-        status(`Slot ${slotIdx} (자동저장): 다운로드 (${u8.length} byte)`, 'success');
-        return;
+      for (const k in userSaves) {
+        const item = userSaves[k];
+        if (!item || !item.b64) continue;
+        const fname = (item.path || '').split('/').pop();
+        if (fname === filename0) {
+          const u8 = _bin2u8(item.b64);
+          triggerBlobDownload(new Blob([u8], { type: 'application/octet-stream' }), filename0);
+          status(`Slot ${slotIdx} (자동저장): 다운로드 (${u8.length} byte)`, 'success');
+          return;
+        }
       }
     } catch (e) { console.warn('[downloadSlot] user_saves IDB error:', e); }
 
-    // 2순위 — localStorage (사용자가 직접 업로드한 sav)
+    // 2순위 — localStorage (사용자가 직접 업로드한 sav, path 기반)
     try {
       if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem('love2d_upload_slot_' + slotIdx);
-        if (raw) {
-          const item = JSON.parse(raw);
-          const u8 = _bin2u8(item.b64);
-          triggerBlobDownload(new Blob([u8], { type: 'application/octet-stream' }), filename0);
-          status(`Slot ${slotIdx} (업로드본): 다운로드 (${u8.length} byte)`, 'success');
-          return;
+        for (let i = 0; i <= 6; i++) {
+          const raw = localStorage.getItem('love2d_upload_slot_' + i);
+          if (!raw) continue;
+          try {
+            const item = JSON.parse(raw);
+            const fname = (item.path || '').split('/').pop();
+            if (fname === filename0) {
+              const u8 = _bin2u8(item.b64);
+              triggerBlobDownload(new Blob([u8], { type: 'application/octet-stream' }), filename0);
+              status(`Slot ${slotIdx} (업로드본): 다운로드 (${u8.length} byte)`, 'success');
+              return;
+            }
+          } catch (er) {}
         }
       }
     } catch (e) { console.warn('[downloadSlot] localStorage error:', e); }
