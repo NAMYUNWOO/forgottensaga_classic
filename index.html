@@ -4,16 +4,22 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510110224"></script>
+    <script src="coi-serviceworker.js?v=20260510111612"></script>
     <meta charset="utf-8">
+    <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
+         CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
+         적용 → 모든 자산 (game.data 포함) 새로 다운. -->
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=overlays-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510110224">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510110224">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510110224">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510110224">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510111612">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510111612">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510111612">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510111612">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -634,9 +640,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510110224"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510110224"></script>
-    <script type="text/javascript" src="game.js?v=20260510110224"></script>
-    <script async type="text/javascript" src="love.js?v=20260510110224" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510111612"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510111612"></script>
+    <script type="text/javascript" src="game.js?v=20260510111612"></script>
+    <script async type="text/javascript" src="love.js?v=20260510111612" onload="applicationLoad(this)"></script>
   </body>
 </html>
