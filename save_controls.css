@@ -31,13 +31,15 @@
     color: #bbb;
     border: 1px solid rgba(150, 150, 170, 0.25);
     border-bottom: 0;
-    padding: 8px 6px;
-    font-size: 12px;
+    padding: 7px 4px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     border-radius: 6px 6px 0 0;
     transition: background 0.15s, color 0.15s;
     font-family: inherit;
+    white-space: nowrap;
+    min-width: 0;
 }
 #save-panel .tab-btn:hover {
     background: rgba(80, 80, 110, 0.6);
@@ -102,6 +104,58 @@
     white-space: pre-wrap;
     word-break: break-word;
     margin: 0;
+}
+
+/* === 개발자노트 탭 === */
+#save-panel .notes-content {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #ddd;
+}
+#save-panel .notes-content h3 {
+    margin: 0 0 2px;
+    font-size: 14px;
+    color: #ffd566;
+    font-weight: 600;
+}
+#save-panel .notes-content .notes-sub {
+    margin: 0 0 14px;
+    font-size: 11px;
+    color: #888;
+}
+#save-panel .notes-content h4 {
+    margin: 14px 0 4px;
+    font-size: 12px;
+    color: #cce0ff;
+    font-weight: 600;
+}
+#save-panel .notes-content p {
+    margin: 6px 0;
+}
+#save-panel .notes-content ul {
+    margin: 4px 0 8px;
+    padding-left: 20px;
+}
+#save-panel .notes-content li {
+    margin: 3px 0;
+    font-size: 11px;
+    color: #ccc;
+    line-height: 1.5;
+}
+#save-panel .notes-content strong { color: #ffd566; }
+#save-panel .notes-content .notes-contact {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(150, 150, 170, 0.25);
+    font-size: 11px;
+    color: #aaa;
+}
+#save-panel .notes-content a {
+    color: #80c8ff;
+    text-decoration: none;
+}
+#save-panel .notes-content a:hover {
+    text-decoration: underline;
 }
 
 /* === DMCA 탭 === */
