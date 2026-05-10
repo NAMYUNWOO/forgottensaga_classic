@@ -4,16 +4,16 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510101304"></script>
+    <script src="coi-serviceworker.js?v=20260510103359"></script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=overlays-content">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510101304">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510101304">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510101304">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510101304">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510103359">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510103359">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510103359">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510103359">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -496,6 +496,39 @@
             window.__savDl = null;
             return;
           }
+          // Auto-save hook: love.filesystem.write 가 sav 저장 시 base64 print →
+          // localStorage 에 보존 → 다음 reload 의 preRun 이 MEMFS 에 inject.
+          var asBeginM = trimmed.match(/^\[SAV_AUTOSAVE_BEGIN\]\s+(\S+)\s+(\d+)$/);
+          if (asBeginM) {
+            window.__savAS = { name: asBeginM[1], totalLen: parseInt(asBeginM[2]), chunks: [] };
+            return;
+          }
+          var asChunkM = trimmed.match(/^\[SAV_AUTOSAVE_CHUNK\]\s+(.+)$/);
+          if (asChunkM && window.__savAS) {
+            window.__savAS.chunks.push(asChunkM[1]);
+            return;
+          }
+          if (trimmed === '[SAV_AUTOSAVE_END]' && window.__savAS) {
+            try {
+              var b64 = window.__savAS.chunks.join('');
+              // savefiles/sagaXX.sav → slot N 추출
+              var slotM = window.__savAS.name.match(/saga(\d+)\.sav$/);
+              if (slotM && typeof localStorage !== 'undefined') {
+                var slot = parseInt(slotM[1], 10);
+                // SaveControls 의 path 와 동일 형식 — preRun 이 그대로 inject 가능
+                var dir = window.LOVE2D_SAVE_DIR;
+                if (dir) {
+                  var fname = window.__savAS.name.replace(/^savefiles\//, '');
+                  var path = dir + '/' + fname;
+                  localStorage.setItem('love2d_upload_slot_' + slot,
+                                       JSON.stringify({ path: path, b64: b64 }));
+                  console.log('[SAV_AUTOSAVE] persisted slot ' + slot + ' (' + b64.length + 'b base64)');
+                }
+              }
+            } catch (e) { console.warn('[SAV_AUTOSAVE] persist fail:', e); }
+            window.__savAS = null;
+            return;
+          }
           var errM = trimmed.match(/^\[SAV_DOWNLOAD_ERR\]\s+(\d+)\s+(.+)$/);
           if (errM) {
             window.__savDl = null;
@@ -601,9 +634,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510101304"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510101304"></script>
-    <script type="text/javascript" src="game.js?v=20260510101304"></script>
-    <script async type="text/javascript" src="love.js?v=20260510101304" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510103359"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510103359"></script>
+    <script type="text/javascript" src="game.js?v=20260510103359"></script>
+    <script async type="text/javascript" src="love.js?v=20260510103359" onload="applicationLoad(this)"></script>
   </body>
 </html>
