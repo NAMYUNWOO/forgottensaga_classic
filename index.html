@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260510120022"></script>
+    <script src="coi-serviceworker.js?v=20260510120601"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260510120022">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510120022">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510120022">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510120022">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260510120601">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260510120601">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260510120601">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260510120601">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -386,12 +386,63 @@
       // sessionStorage 에 SaveControls 가 저장한 pending uploads 를 MEMFS 에 inject.
       // emscripten IDBFS 의 reconcile 동작 (MEMFS = source-of-truth) 을 우회 위해
       // game runtime 의 MEMFS 에 직접 file 생성 → syncfs(false) 시 IDBFS 에 sync.
+      // IndexedDB 별도 DB ('love2d_user_saves') 에서 sav 읽음 — async 라
+      // emscripten 의 addRunDependency 으로 preRun 동기화. localStorage fail
+      // 시에도 IDB 에 저장된 sav 복원 가능 (모바일 호환 path).
+      function _readUserSavesFromIDB(callback) {
+        try {
+          var req = indexedDB.open('love2d_user_saves', 1);
+          req.onupgradeneeded = function(e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves');
+          };
+          req.onsuccess = function(e) {
+            var db = e.target.result;
+            try {
+              if (!db.objectStoreNames.contains('saves')) { db.close(); callback([]); return; }
+              var tx = db.transaction(['saves'], 'readonly');
+              var store = tx.objectStore('saves');
+              var getReq = store.getAll();
+              getReq.onsuccess = function() {
+                var arr = getReq.result || [];
+                var items = [];
+                for (var i = 0; i < arr.length; i++) {
+                  try { items.push(JSON.parse(arr[i])); } catch (e) {}
+                }
+                db.close();
+                callback(items);
+              };
+              getReq.onerror = function() { db.close(); callback([]); };
+            } catch (er) { db.close(); callback([]); }
+          };
+          req.onerror = function() { callback([]); };
+        } catch (e) { callback([]); }
+      }
+
       function preRunInjectUploads() {
+        // emscripten 의 async 처리 — IDB read 완료까지 dependency 추가
+        if (Module.addRunDependency) Module.addRunDependency('user_saves');
+        var done = false;
+        function finish() {
+          if (done) return; done = true;
+          if (Module.removeRunDependency) Module.removeRunDependency('user_saves');
+        }
+        // 1. IDB 에서 sav read (async)
+        _readUserSavesFromIDB(function(idbItems) {
+          try {
+            _injectPendingSaves(idbItems);
+          } catch (e) { console.warn('[preRun] inject after IDB:', e); }
+          finish();
+        });
+        // safety timeout — IDB read 가 5초 안 끝나면 강제 진행
+        setTimeout(finish, 5000);
+      }
+      function _injectPendingSaves(idbPending) {
         // OUTER try-catch — storage access 가 모바일 Chrome incognito / 3rd-party
         // cookie blocked / privacy mode 등에서 SecurityError throw → emscripten
         // dependency loading 차단 방지. 어떤 throw 든 silent.
         try {
-          var pending = [];
+          var pending = idbPending || [];
           try {
             if (typeof sessionStorage !== 'undefined') {
               var raw1 = sessionStorage.getItem('love2d_pending_uploads');
@@ -515,23 +566,60 @@
             return;
           }
           if (trimmed === '[SAV_AUTOSAVE_END]' && window.__savAS) {
-            try {
-              var b64 = window.__savAS.chunks.join('');
-              // savefiles/sagaXX.sav → slot N 추출
-              var slotM = window.__savAS.name.match(/saga(\d+)\.sav$/);
-              if (slotM && typeof localStorage !== 'undefined') {
-                var slot = parseInt(slotM[1], 10);
-                // SaveControls 의 path 와 동일 형식 — preRun 이 그대로 inject 가능
+            (function() {
+              var slot = '?', size = 0, status = 'unknown', errMsg = '';
+              try {
+                var b64 = window.__savAS.chunks.join('');
+                size = b64.length;
+                var slotM = window.__savAS.name.match(/saga(\d+)\.sav$/);
+                if (!slotM) { status = 'no slot match'; return; }
+                slot = parseInt(slotM[1], 10);
                 var dir = window.LOVE2D_SAVE_DIR;
-                if (dir) {
-                  var fname = window.__savAS.name.replace(/^savefiles\//, '');
-                  var path = dir + '/' + fname;
-                  localStorage.setItem('love2d_upload_slot_' + slot,
-                                       JSON.stringify({ path: path, b64: b64 }));
-                  console.log('[SAV_AUTOSAVE] persisted slot ' + slot + ' (' + b64.length + 'b base64)');
+                if (!dir) { status = 'LOVE2D_SAVE_DIR 미설정'; return; }
+                var fname = window.__savAS.name.replace(/^savefiles\//, '');
+                var path = dir + '/' + fname;
+                var entry = JSON.stringify({ path: path, b64: b64 });
+
+                // 1순위: IndexedDB 별도 DB ('love2d_user_saves') — quota 큼, 정책 영향 적음
+                var idbReq = indexedDB.open('love2d_user_saves', 1);
+                idbReq.onupgradeneeded = function(e) {
+                  var db = e.target.result;
+                  if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves');
+                };
+                idbReq.onsuccess = function(e) {
+                  var db = e.target.result;
+                  try {
+                    var tx = db.transaction(['saves'], 'readwrite');
+                    tx.objectStore('saves').put(entry, 'slot_' + slot);
+                    tx.oncomplete = function() { db.close(); console.log('[SAV_AUTOSAVE] IDB OK slot ' + slot + ' ' + size + 'b'); };
+                    tx.onerror = function(er) { db.close(); console.warn('[SAV_AUTOSAVE] IDB tx fail:', er); };
+                  } catch (ie) { db.close(); console.warn('[SAV_AUTOSAVE] IDB tx err:', ie); }
+                };
+                idbReq.onerror = function(e) { console.warn('[SAV_AUTOSAVE] IDB open fail:', e); };
+
+                // 2순위: localStorage (parallel write — 일부 환경에서 fail 가능)
+                try {
+                  localStorage.setItem('love2d_upload_slot_' + slot, entry);
+                  status = 'OK (IDB+LS)';
+                } catch (lsErr) {
+                  status = 'IDB only (LS fail: ' + lsErr.message + ')';
+                  errMsg = lsErr.message || '';
                 }
+              } catch (e) {
+                status = 'fail';
+                errMsg = e.message || String(e);
+                console.warn('[SAV_AUTOSAVE] persist fail:', e);
               }
-            } catch (e) { console.warn('[SAV_AUTOSAVE] persist fail:', e); }
+              // 화면 toast — 사용자가 시각적 확인
+              var toast = document.createElement('div');
+              toast.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);'
+                + 'background:rgba(0,40,0,0.92);color:#cfc;padding:8px 14px;'
+                + 'font:11px monospace;border:1px solid #4f4;border-radius:6px;'
+                + 'z-index:300;max-width:90vw;text-align:center;';
+              toast.textContent = '💾 Slot ' + slot + ' 자동저장: ' + status + ' (' + size + 'b)' + (errMsg ? ' — ' + errMsg : '');
+              document.body.appendChild(toast);
+              setTimeout(function() { try { toast.remove(); } catch (e) {} }, 4000);
+            })();
             window.__savAS = null;
             return;
           }
@@ -640,9 +728,9 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="mobile_input.js?v=20260510120022"></script>
-    <script type="text/javascript" src="save_controls.js?v=20260510120022"></script>
-    <script type="text/javascript" src="game.js?v=20260510120022"></script>
-    <script async type="text/javascript" src="love.js?v=20260510120022" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260510120601"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260510120601"></script>
+    <script type="text/javascript" src="game.js?v=20260510120601"></script>
+    <script async type="text/javascript" src="love.js?v=20260510120601" onload="applicationLoad(this)"></script>
   </body>
 </html>
