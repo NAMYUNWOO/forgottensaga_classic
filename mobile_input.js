@@ -60,45 +60,61 @@ const MobileInput = (() => {
   function installIME() {
     const ime = document.getElementById('mobile-ime');
     if (!ime) return;
+    // 사용자 시각 확인용 별도 누적 buffer — textbox value 가 환경별로 누적/clear
+    // 동작이 달라서 (특히 iOS Safari + 한글 IME) 우리가 직접 buffer 관리 + textbox.value
+    // 에 강제 write 하여 사용자 시각에 반드시 보이게.
+    let visBuf = '';
     let composing = false;
-    // textbox 안 텍스트는 사용자 시각 확인 용으로 누적 visible — 게임으로 forward 한
-    // 부분의 길이만 추적해서 새 char 만 forward (이전 글자 중복 forward 방지).
-    let lastForwardedLen = 0;
-    // textbox 자체 reset helper — IME 토글 시 외부에서도 호출 가능하게 attach.
-    ime._resetForwardState = () => { lastForwardedLen = 0; };
+    ime._resetForwardState = () => { visBuf = ''; ime.value = ''; };
+
+    function forwardChar(ch) {
+      if (!ch) return;
+      const canvas = document.getElementById('canvas') || window;
+      const ev = new InputEvent('textinput', { data: ch, bubbles: true });
+      canvas.dispatchEvent(ev);
+      if (window.Module && window.Module.ccall) {
+        try {
+          window.Module.ccall('emscripten_text_input', null, ['string'], [ch]);
+        } catch (e) { /* ignore — fork 마다 다름 */ }
+      }
+    }
+    function appendVisible(text) {
+      if (!text) return;
+      visBuf += text;
+      // 너무 길면 끝에서 30 자만 유지 (textbox UX)
+      if (visBuf.length > 30) visBuf = visBuf.slice(-30);
+      ime.value = visBuf;
+    }
 
     ime.addEventListener('compositionstart', () => { composing = true; });
-    ime.addEventListener('compositionend', () => {
+    ime.addEventListener('compositionend', (ev) => {
       composing = false;
-      flushIme();
+      // 조합 완료 — ev.data 가 최종 한글 (예 "각"). game 으로 forward + textbox 누적.
+      const data = ev.data || '';
+      for (const ch of data) forwardChar(ch);
+      appendVisible(data);
     });
-    ime.addEventListener('input', () => {
-      if (composing) return;  // IME 조합 중엔 대기
-      flushIme();
-    });
-    function flushIme() {
-      const value = ime.value;
-      // backspace 등으로 textbox 가 짧아짐 — lastForwardedLen sync (게임에 추가 forward X
-      // 게임 측 prompt 는 자체적으로 backspace 처리 — 여기서 게임에 인공적 backspace
-      // 보내지 않음. 사용자가 textbox 에서 지운 건 textbox 시각만 반영).
-      if (value.length < lastForwardedLen) {
-        lastForwardedLen = value.length;
+    ime.addEventListener('input', (ev) => {
+      // input event 의 inputType 으로 종류 구분.
+      const it = ev.inputType || '';
+      if (it === 'insertCompositionText' || composing) {
+        // 조합 중 — visBuf 는 그대로, 단 textbox 에 조합 중간 결과 보이도록
+        // ime.value = visBuf + ev.data 로 set (compositionend 시 final 로 덮어씀).
+        ime.value = visBuf + (ev.data || '');
         return;
       }
-      if (value.length === lastForwardedLen) return;
-      const newPart = value.substring(lastForwardedLen);
-      const canvas = document.getElementById('canvas') || window;
-      for (const ch of newPart) {
-        const ev = new InputEvent('textinput', { data: ch, bubbles: true });
-        canvas.dispatchEvent(ev);
-        if (window.Module && window.Module.ccall) {
-          try {
-            window.Module.ccall('emscripten_text_input', null, ['string'], [ch]);
-          } catch (e) { /* ignore — fork 마다 다름 */ }
-        }
+      if (it.startsWith('delete')) {
+        // textbox backspace — visBuf 한 글자 줄임 (시각만, 게임엔 backspace 안 보냄)
+        visBuf = visBuf.slice(0, -1);
+        ime.value = visBuf;
+        return;
       }
-      lastForwardedLen = value.length;
-    }
+      // 일반 영문/숫자 직접 입력 — ev.data 의 char forward + 누적 visible
+      const data = ev.data;
+      if (!data) return;
+      for (const ch of data) forwardChar(ch);
+      appendVisible(data);
+    });
   }
 
   // === Joystick — 4방향 키보드 입력 emulation ===
