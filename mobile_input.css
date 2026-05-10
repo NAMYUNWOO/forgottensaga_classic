@@ -179,6 +179,30 @@
     border-color: rgba(255, 213, 102, 0.9);
 }
 
+/* === Chromium 권장 banner — 비-Chrome 브라우저에서 컨트롤러 밑에 표시 ===
+ * JS 가 isChrome 검출 후 .show class 토글. 캔버스 아래 + top-right (bottom 196) 위. */
+#browser-recommend {
+    display: none;
+    position: fixed;
+    bottom: 244px;
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    background: rgba(40, 40, 60, 0.85);
+    color: #ffd566;
+    border: 2px solid rgba(255, 213, 102, 0.9);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+    text-align: center;
+    z-index: 198;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    max-width: 90vw;
+    white-space: nowrap;
+}
+#browser-recommend.show { display: block; }
+#browser-recommend strong { color: #fff; }
+
 /* === 게임 캔버스 영역 — 모바일에서 키패드 + aux row 위로 안 가려지게 === */
 @media (pointer: coarse), (max-width: 1024px) {
     /* .game-wrap 의 mobile 정의는 index.html 의 inline <style> 로 이전 — load 순서상
