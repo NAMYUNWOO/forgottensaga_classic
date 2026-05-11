@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260511152004"></script>
+    <script src="coi-serviceworker.js?v=20260511175827"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260511152004">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260511152004">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260511152004">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260511152004">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260511175827">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260511175827">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260511175827">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260511175827">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -556,22 +556,29 @@
             // path 의 parent dir 자동 생성
             var parts = item.path.split('/').filter(function(s) { return s.length > 0; });
             var fname = parts.pop();
-            var parent = '';
-            for (var k = 0; k < parts.length; k++) {
-              try {
-                if (Module.FS_createFolder) Module.FS_createFolder(parent || '/', parts[k], true, true);
-                else if (Module.FS && Module.FS.mkdir) Module.FS.mkdir((parent || '') + '/' + parts[k]);
-              } catch (e) { /* 이미 존재 */ }
-              parent = (parent || '') + '/' + parts[k];
-            }
+            var parentPath = parts.join('/');  // "home/web_user/love/game/savefiles"
+            try {
+              // custom love.js 빌드 export: FS_createPath (full path 한 번에 생성).
+              // FS_createFolder 는 export 안 됨 (옛 emscripten API).
+              if (Module.FS_createPath) {
+                Module.FS_createPath('/', parentPath, true, true);
+              } else if (Module.FS && Module.FS.mkdir) {
+                var p = '';
+                for (var k = 0; k < parts.length; k++) {
+                  p = p + '/' + parts[k];
+                  try { Module.FS.mkdir(p); } catch (e) {}
+                }
+              }
+            } catch (e) { /* 이미 존재 또는 partial */ }
+            var parent = '/' + parentPath;
             // file 생성
             try {
               if (Module.FS_createDataFile) {
-                Module.FS_createDataFile(parent || '/', fname, u8, true, true, true);
+                Module.FS_createDataFile(parent, fname, u8, true, true, true);
               } else if (Module.FS && Module.FS.writeFile) {
                 Module.FS.writeFile(parent + '/' + fname, u8);
               } else {
-                console.warn('[preRun] MEMFS inject API 없음');
+                _preRunLog('[preRun] MEMFS inject API 없음');
                 return;
               }
               console.log('[preRun] sav inject:', item.path, u8.length, 'bytes');
@@ -821,8 +828,8 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="nipplejs.min.js?v=20260511152004"></script>
-    <script type="text/javascript" src="mobile_input.js?v=20260511152004"></script>
+    <script type="text/javascript" src="nipplejs.min.js?v=20260511175827"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260511175827"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -842,8 +849,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260511152004"></script>
-    <script type="text/javascript" src="game.js?v=20260511152004"></script>
-    <script async type="text/javascript" src="love.js?v=20260511152004" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260511175827"></script>
+    <script type="text/javascript" src="game.js?v=20260511175827"></script>
+    <script async type="text/javascript" src="love.js?v=20260511175827" onload="applicationLoad(this)"></script>
   </body>
 </html>
