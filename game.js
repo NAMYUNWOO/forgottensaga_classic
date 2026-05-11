@@ -227,7 +227,7 @@ Module.expectedDataFileDownloads++;
         // copy the entire loaded file into a spot in the heap. Files will refer to slices in that. They cannot be freed though
         // (we may be allocating before malloc is ready, during startup).
         if (Module['SPLIT_MEMORY']) Module.printErr('warning: you should run the file packager with --no-heap-copy when SPLIT_MEMORY is used, otherwise copying into the heap may fail due to the splitting');
-        var ptr = Module['getMemory'](byteArray.length);
+        var ptr = (Module['getMemory']||Module['_malloc'])(byteArray.length);
         Module['HEAPU8'].set(byteArray, ptr);
         DataRequest.prototype.byteArray = Module['HEAPU8'].subarray(ptr, ptr+byteArray.length);
 
@@ -284,6 +284,6 @@ Module.expectedDataFileDownloads++;
     }
 
   }
-  loadPackage({"package_uuid":"78495cef-4958-456d-9730-15b0e8745404","remote_package_size":92071492,"files":[{"filename":"/game.love","crunched":0,"start":0,"end":92071492,"audio":false}]});
+  loadPackage({"package_uuid":"f8d5c0c9-3558-4fec-a16d-c2042fd803ee","remote_package_size":92071457,"files":[{"filename":"/game.love","crunched":0,"start":0,"end":92071457,"audio":false}]});
 
 })();

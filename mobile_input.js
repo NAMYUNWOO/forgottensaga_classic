@@ -57,64 +57,115 @@ const MobileInput = (() => {
     el.addEventListener('mouseleave', release);
   }
 
+  // SDL2 textinput candidate — custom 빌드 love.js 가 _SDL_SendKeyboardText export.
+  // 첫 호출 시 사용 method 1 회 log (디버그).
+  let _fwdMethodLogged = false;
+  function _dbg(msg) {
+    try { console.log(msg); } catch (e) {}
+    if (window.__logPush) {
+      try { window.__logPush(msg, false); } catch (e) {}
+    }
+  }
+
   function installIME() {
     const ime = document.getElementById('mobile-ime');
     if (!ime) return;
-    // 사용자 시각 확인용 별도 누적 buffer — textbox value 가 환경별로 누적/clear
-    // 동작이 달라서 (특히 iOS Safari + 한글 IME) 우리가 직접 buffer 관리 + textbox.value
-    // 에 강제 write 하여 사용자 시각에 반드시 보이게.
-    let visBuf = '';
     let composing = false;
-    ime._resetForwardState = () => { visBuf = ''; ime.value = ''; };
 
     function forwardChar(ch) {
       if (!ch) return;
-      const canvas = document.getElementById('canvas') || window;
-      const ev = new InputEvent('textinput', { data: ch, bubbles: true });
-      canvas.dispatchEvent(ev);
-      if (window.Module && window.Module.ccall) {
+      const M = window.Module;
+      // 1순위: ccall('SDL_SendKeyboardText') — custom 빌드 love.js 에 export 됨.
+      // SDL2 의 internal API 로 textinput event 를 main thread 에 push → love.textinput.
+      if (M && M.ccall) {
         try {
-          window.Module.ccall('emscripten_text_input', null, ['string'], [ch]);
-        } catch (e) { /* ignore — fork 마다 다름 */ }
+          M.ccall('SDL_SendKeyboardText', null, ['string'], [ch]);
+          if (!_fwdMethodLogged) {
+            _fwdMethodLogged = true;
+            _dbg('[fwd] using ccall:SDL_SendKeyboardText');
+          }
+          return;
+        } catch (e) { /* fall through */ }
       }
+      // 2순위: Module._SDL_SendKeyboardText 직접 호출 (ccall 없으면)
+      if (M && typeof M._SDL_SendKeyboardText === 'function' && M.allocateUTF8 && M._free) {
+        try {
+          const ptr = M.allocateUTF8(ch);
+          M._SDL_SendKeyboardText(ptr);
+          M._free(ptr);
+          if (!_fwdMethodLogged) {
+            _fwdMethodLogged = true;
+            _dbg('[fwd] using direct:_SDL_SendKeyboardText');
+          }
+          return;
+        } catch (e) { /* fall through */ }
+      }
+      // 3순위: 광범위 InputEvent dispatch (iOS Safari fallback — 기존 npm love.js 호환)
+      const canvas = document.getElementById('canvas') || window;
+      const targets = [canvas, document, window];
+      try {
+        const ev = new InputEvent('textinput', { data: ch, bubbles: true });
+        for (const t of targets) { try { t.dispatchEvent(ev); } catch (e) {} }
+        if (!_fwdMethodLogged) {
+          _fwdMethodLogged = true;
+          _dbg('[fwd] using inputEvent-broad (custom love.js 미적용?)');
+        }
+      } catch (e) {}
     }
-    function appendVisible(text) {
-      if (!text) return;
-      visBuf += text;
-      // 너무 길면 끝에서 30 자만 유지 (textbox UX)
-      if (visBuf.length > 30) visBuf = visBuf.slice(-30);
-      ime.value = visBuf;
+    function forwardBackspace() {
+      const canvas = document.getElementById('canvas') || window;
+      const targets = [canvas, document, window];
+      for (const type of ['keydown', 'keyup']) {
+        const ev = new KeyboardEvent(type, {
+          key: 'Backspace', code: 'Backspace', keyCode: 8, which: 8,
+          bubbles: true, cancelable: true,
+        });
+        for (const t of targets) { try { t.dispatchEvent(ev); } catch (e) {} }
+      }
     }
 
     ime.addEventListener('compositionstart', () => { composing = true; });
     ime.addEventListener('compositionend', (ev) => {
       composing = false;
-      // 조합 완료 — ev.data 가 최종 한글 (예 "각"). game 으로 forward + textbox 누적.
       const data = ev.data || '';
       for (const ch of data) forwardChar(ch);
-      appendVisible(data);
+      // input 비우기 — 다음 입력 시 ime.value 누적 방지
+      ime.value = '';
     });
     ime.addEventListener('input', (ev) => {
-      // input event 의 inputType 으로 종류 구분.
       const it = ev.inputType || '';
-      if (it === 'insertCompositionText' || composing) {
-        // 조합 중 — visBuf 는 그대로, 단 textbox 에 조합 중간 결과 보이도록
-        // ime.value = visBuf + ev.data 로 set (compositionend 시 final 로 덮어씀).
-        ime.value = visBuf + (ev.data || '');
-        return;
-      }
+      // composition 중간 결과 — compositionend 에서 처리되므로 여기선 skip
+      if (it === 'insertCompositionText' || composing) return;
+      // backspace — 게임에 KeyboardEvent backspace forward
       if (it.startsWith('delete')) {
-        // textbox backspace — visBuf 한 글자 줄임 (시각만, 게임엔 backspace 안 보냄)
-        visBuf = visBuf.slice(0, -1);
-        ime.value = visBuf;
+        ime.value = '';
+        forwardBackspace();
         return;
       }
-      // 일반 영문/숫자 직접 입력 — ev.data 의 char forward + 누적 visible
       const data = ev.data;
-      if (!data) return;
-      for (const ch of data) forwardChar(ch);
-      appendVisible(data);
+      if (data) {
+        for (const ch of data) forwardChar(ch);
+      }
+      // input 비우기 — buffer 누적 방지 (panel 표시 안 함, value 시각 표시 X)
+      ime.value = '';
     });
+    // textbox blur 시 imeBtn active state 해제
+    ime.addEventListener('blur', () => {
+      const imeBtn = document.getElementById('btn-ime');
+      if (imeBtn) imeBtn.classList.remove('active');
+    });
+
+    // 키보드 밖 터치 / 클릭 → ime blur → 가상 키보드 자동 닫힘.
+    // 가상 키보드 자체 터치는 browser native UI 라 page 의 touchstart event 발생 X — 안전.
+    const dismissIfOutside = (e) => {
+      if (document.activeElement !== ime) return;
+      const imeBtn = document.getElementById('btn-ime');
+      // imeBtn (토글) 과 ime 자체 클릭은 제외 — 토글로 처리
+      if (e.target === ime || e.target === imeBtn || (imeBtn && imeBtn.contains(e.target))) return;
+      ime.blur();
+    };
+    document.addEventListener('touchstart', dismissIfOutside, { passive: true });
+    document.addEventListener('mousedown', dismissIfOutside);
   }
 
   // === Joystick — nipplejs 사용 (multi-touch / touchcancel / Pointer Events 검증된 lib) ===
@@ -203,35 +254,23 @@ const MobileInput = (() => {
       const k = el.dataset.key;
       if (k) bindButton(el, k);
     });
-    // 키보드 토글 — PC 에서도 visible textbox 띄워서 한국어 입력 (OS IME) 가능.
-    // Mobile: focus 만 해도 가상 키보드 자동. PC: visible textbox 가 user 입력 확인.
+    // 키보드 토글 — invisible #mobile-ime 에 focus() 만 호출하여 OS 가상 키보드 trigger.
+    // 별도 panel/textbox 표시 X. 사용자 입력 → input event → forwardChar → 게임 prompt.
     const imeBtn = document.getElementById('btn-ime');
     if (imeBtn) {
       imeBtn.addEventListener('click', (e) => {
         e.preventDefault();
         const ime = document.getElementById('mobile-ime');
         if (!ime) return;
-        if (ime.classList.contains('visible')) {
-          ime.classList.remove('visible');
-          imeBtn.classList.remove('active');
+        if (document.activeElement === ime) {
           ime.blur();
+          imeBtn.classList.remove('active');
         } else {
-          ime.classList.add('visible');
+          ime.value = '';  // 누적 buffer reset
+          // user gesture 안에서 focus 호출 — iOS Safari / Android Chrome 가상 키보드 등장
+          ime.focus();
           imeBtn.classList.add('active');
-          ime.value = '';
-          if (ime._resetForwardState) ime._resetForwardState();
-          // small delay → CSS transition 적용 후 focus (mobile 가상 키보드 trigger)
-          setTimeout(() => ime.focus(), 30);
         }
-      });
-      // ime input 외부 클릭 시 자동 hide (UX) — 단 ime 자체와 button 클릭은 제외.
-      document.addEventListener('mousedown', (e) => {
-        const ime = document.getElementById('mobile-ime');
-        if (!ime || !ime.classList.contains('visible')) return;
-        if (e.target === ime || e.target === imeBtn) return;
-        ime.classList.remove('visible');
-        imeBtn.classList.remove('active');
-        ime.blur();
       });
     }
     installIME();

@@ -128,51 +128,26 @@
     color: #ffd566;
 }
 
-/* === IME input (모바일 가상 키보드 trigger + PC 한국어 입력 visible textbox) ===
- * 기본은 hidden — focus 시 모바일은 가상 키보드 띄움. PC 는 시각 변화 X 라 사용자가
- * 입력 가능한지 모름 → .visible class 활성 시 화면 가운데 textbox 로 표시.
+/* === IME input — OS 가상 키보드 trigger 용 invisible focus target ===
+ * 사용자 시각엔 안 보임 (1px size, opacity 0, transparent color/caret). 단 viewport
+ * 안에 valid focusable element 로 존재 — "키보드" 버튼 click 시 focus() 호출 → iOS/
+ * Android 가상 키보드 등장. 입력은 input event 로 받아 forwardChar 으로 게임 직접 forward.
+ * .visible class 토글 X — 별도 textbox panel 없음.
  */
 #mobile-ime {
-    position: absolute;
-    top: -100px; left: -100px;
+    position: fixed;
+    top: 0; left: 0;
     width: 1px; height: 1px;
     opacity: 0;
-    pointer-events: none;
-}
-#mobile-ime.visible {
-    position: fixed;
-    top: 24px; left: 50%;
-    transform: translateX(-50%);
-    width: min(360px, 90vw);
-    height: 48px;
-    opacity: 1;
-    pointer-events: auto;
-    background: rgba(255, 255, 255, 0.97);
-    color: #222;
-    border: 3px solid rgba(255, 213, 102, 0.95);
-    border-radius: 10px;
-    padding: 6px 14px;
-    font-size: 16px;
-    text-align: center;
-    z-index: 250;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: transparent;
+    caret-color: transparent;
     outline: none;
-    cursor: text;
-    /* 사용자 시선 끌기 위한 부드러운 pulse 애니메이션 (focus 전까지) */
-    animation: ime-pulse 1.6s ease-in-out infinite;
-}
-#mobile-ime.visible:focus {
-    animation: none;
-    border-color: rgba(120, 200, 120, 0.95);
-}
-#mobile-ime.visible::placeholder {
-    color: #888;
-    text-align: center;
-    font-size: 14px;
-}
-@keyframes ime-pulse {
-    0%, 100% { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 0 0 rgba(255, 213, 102, 0.6); }
-    50%      { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 0 12px rgba(255, 213, 102, 0); }
+    z-index: 1;
+    /* pointer-events: auto 가 default — 사용자가 직접 click 가능. 단 1px 라 실제 click
+     * 어려움. "키보드" 버튼 가 focus 호출이 일반 path. */
 }
 #btn-ime.active {
     background: rgba(120, 160, 220, 0.75);
@@ -251,10 +226,13 @@
         font-size: 12px;
         flex: 1;
     }
-    /* 모바일: 키보드 textbox 를 화면 아래 (canvas 밑, aux row 위) 로 이동 */
+    /* 모바일: textbox 는 화면 상단 (top: 14px). 이전 bottom: 250 은 가상 키보드
+     * (Android 280-320px, iOS 250-300px) 영역과 겹쳐 사용자가 textbox 를 못 봄.
+     * 화면 상단이면 키보드와 절대 안 겹침. 캐릭터 이름 입력 phase 에서 잠시 게임
+     * 캔버스 상단 일부 가리지만 입력 종료 후 hide. */
     #mobile-ime.visible {
-        top: auto;
-        bottom: 250px;  /* aux row (bottom 196 + 40 = 236) 위 14px gap */
+        top: 14px;
+        bottom: auto;
     }
 }
 
