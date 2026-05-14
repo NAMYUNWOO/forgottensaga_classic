@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/NAMYUNWOO/forgottensaga-love2d/main/docs/images/hero.png" alt="포가튼사가 - 히로" width="128">
+  <img src="hero.png" alt="포가튼사가 - 히로" width="128">
 </p>
 
 # 포가튼사가 (Forgotten Saga) — Web Build
