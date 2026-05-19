@@ -128,26 +128,38 @@
     color: #ffd566;
 }
 
-/* === IME input — OS 가상 키보드 trigger 용 invisible focus target ===
- * 사용자 시각엔 안 보임 (1px size, opacity 0, transparent color/caret). 단 viewport
- * 안에 valid focusable element 로 존재 — "키보드" 버튼 click 시 focus() 호출 → iOS/
- * Android 가상 키보드 등장. 입력은 input event 로 받아 forwardChar 으로 게임 직접 forward.
- * .visible class 토글 X — 별도 textbox panel 없음.
+/* === IME input — "visible-to-OS hidden-to-user" pattern ===
+ * 사용자 시각엔 안 보이지만 OS IME 가 visible element 로 인식하는 충분한 크기/
+ * opacity. 1px / opacity 0 같은 too-invisible 한 input 은 일부 OS (Windows
+ * Microsoft IME, Android GBoard) 가 invisible 로 판단 → IME context 미활성 →
+ * 한국어 입력 / composition 불가.
+ *
+ * 핵심:
+ *   - 200×30 size + opacity 1 → OS 가 정상 visible element 로 인식
+ *   - background / color / caret-color: transparent → 사용자에겐 안 보임
+ *   - pointer-events: none → click 통과 (canvas / UI 영향 X)
+ *
+ * PC: 항상 focus 유지 (mobile_input.js). 사용자가 한/영 키 눌러 OS IME 한국어
+ *     모드 전환 → 자연스러운 입력.
+ * 모바일: btn-ime 클릭으로 focus 토글 (가상 키보드 등장/닫힘).
  */
 #mobile-ime {
     position: fixed;
     top: 0; left: 0;
-    width: 1px; height: 1px;
-    opacity: 0;
+    width: 200px; height: 30px;
+    opacity: 1;
     border: 0;
     padding: 0;
     background: transparent;
     color: transparent;
     caret-color: transparent;
     outline: none;
-    z-index: 1;
-    /* pointer-events: auto 가 default — 사용자가 직접 click 가능. 단 1px 라 실제 click
-     * 어려움. "키보드" 버튼 가 focus 호출이 일반 path. */
+    pointer-events: none;
+    /* z-index 99999 — splash-overlay (9999), save-panel (200), audio-prompt
+     * (180), top-right (199) 등 모든 overlay 보다 위. 이전 z-index 50 은 splash
+     * 의 hidden 상태 (display: flex + opacity 0) stacking 아래로 깔려 큰 창에서
+     * focus 못 받는 버그 원인. */
+    z-index: 99999;
 }
 #btn-ime.active {
     background: rgba(120, 160, 220, 0.75);

@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260512172001"></script>
+    <script src="coi-serviceworker.js?v=20260519225503"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260512172001">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260512172001">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260512172001">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260512172001">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260519225503">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260519225503">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260519225503">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260519225503">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -251,13 +251,14 @@
         </div>
       </div>
 
+      <!-- OS IME 입력 target. PC + 모바일 모두 사용 (PC: 항상 focus 유지,
+           모바일: btn-ime 토글). mobile-input (@media display:none on PC) 의 자식
+           이면 PC 에서 함께 hidden 되어 focus 못 받는 버그가 있어 mobile-input
+           밖으로 분리. -->
+      <input id="mobile-ime" type="text" lang="ko" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
       <!-- 모바일 가상 키패드 (touch 디바이스에서만 표시, CSS 분기) -->
       <div id="mobile-input">
-        <!-- OS 가상 키보드 trigger 용 invisible input — 사용자에게 panel 표시 안 함.
-             "키보드" 버튼 click → focus() → OS 키보드 등장 → 사용자 입력 → input event
-             → forwardChar → 게임 prompt 로 바로 forward. -->
-        <input id="mobile-ime" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-
         <!-- 좌하단 조이스틱: nipplejs 가 자체 base/knob element 추가 (zone 으로 사용). -->
         <div class="joystick" id="joystick"></div>
 
@@ -828,8 +829,8 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="nipplejs.min.js?v=20260512172001"></script>
-    <script type="text/javascript" src="mobile_input.js?v=20260512172001"></script>
+    <script type="text/javascript" src="nipplejs.min.js?v=20260519225503"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260519225503"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -849,8 +850,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260512172001"></script>
-    <script type="text/javascript" src="game.js?v=20260512172001"></script>
-    <script async type="text/javascript" src="love.js?v=20260512172001" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260519225503"></script>
+    <script type="text/javascript" src="game.js?v=20260519225503"></script>
+    <script async type="text/javascript" src="love.js?v=20260519225503" onload="applicationLoad(this)"></script>
   </body>
 </html>
