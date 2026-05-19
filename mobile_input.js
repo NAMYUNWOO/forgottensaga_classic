@@ -227,9 +227,11 @@ const MobileInput = (() => {
 
     // PC: 항상 focus 유지. visible-to-OS pattern + pointer-events: none 이라
     // canvas / UI click 영향 없음. JS focus() 만으로 IME context 활성.
+    // preventScroll: true — focus 시 brouwser 의 scrollIntoView 자동 동작 차단
+    // (viewport 가 ime 위치로 점프하는 버그 회피).
     if (_isPCEnv) {
       const ensureFocus = () => {
-        try { ime.focus(); } catch (e) {}
+        try { ime.focus({ preventScroll: true }); } catch (e) {}
       };
       ensureFocus();
       setTimeout(ensureFocus, 500);
@@ -379,7 +381,8 @@ const MobileInput = (() => {
         } else {
           ime.value = '';  // 누적 buffer reset
           // user gesture 안에서 focus 호출 — iOS Safari / Android Chrome 가상 키보드 등장
-          ime.focus();
+          // preventScroll: true — focus 시 viewport scroll/zoom 발동 차단.
+          ime.focus({ preventScroll: true });
           imeBtn.classList.add('active');
         }
       });

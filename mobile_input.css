@@ -155,11 +155,11 @@
     caret-color: transparent;
     outline: none;
     pointer-events: none;
-    /* z-index 99999 — splash-overlay (9999), save-panel (200), audio-prompt
-     * (180), top-right (199) 등 모든 overlay 보다 위. 이전 z-index 50 은 splash
-     * 의 hidden 상태 (display: flex + opacity 0) stacking 아래로 깔려 큰 창에서
-     * focus 못 받는 버그 원인. */
     z-index: 99999;
+    /* font-size 16px 명시 — iOS Safari 는 input font-size < 16px 면 focus 시
+     * 자동 zoom in 으로 글자 키움. 사용자 시각엔 transparent 라 영향 없지만
+     * brouwser 가 zoom 발동시켜 viewport 가 튀는 버그 회피. */
+    font-size: 16px;
 }
 #btn-ime.active {
     background: rgba(120, 160, 220, 0.75);
