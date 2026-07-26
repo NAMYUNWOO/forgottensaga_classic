@@ -1,8 +1,53 @@
 <p align="center">
-  <img src="hero.png" alt="포가튼사가 - 히로" width="128">
+  <img src="hero.png" alt="Forgotten Saga - Hero" width="128">
 </p>
 
-# 포가튼사가 (Forgotten Saga) — Web Build
+<h1 align="center">Forgotten Saga — Web Build</h1>
+
+<p align="center">
+  <a href="#forgotten-saga--web-build">English</a> | <a href="#포가튼사가-forgotten-saga--web-build">한국어</a>
+</p>
+
+**Play**: https://namyunwoo.github.io/forgottensaga_classic/
+
+A browser build (LÖVE.js / WebAssembly) of a from-scratch reimplementation of **Forgotten Saga**, a 1997 Korean DOS RPG — reverse-engineered from the original binary and rebuilt in Lua, function by function.
+
+Source (reverse engineering + Love2D port): https://github.com/NAMYUNWOO/forgottensaga-love2d
+
+## Why this project matters
+
+- **Reviving a forgotten game**: play a 1997 Korean DOS RPG directly in a modern browser — no DOS emulator needed, runs on both desktop and mobile.
+- **Faithful to the original**: every system (Z-sorting, the SCP bytecode VM, NPC state machines, palette cycling, trap logic, and more) is ported function-by-function from a Ghidra decompilation of the original Windows binary (937/937 functions decompiled) — not reverse-guessed from watching gameplay.
+- **Preserved for the next 30 years**: turns a disappearing 1997 title into a form that can be studied, played, and preserved indefinitely.
+
+## Structure
+
+- `index.html` — game entry point: love.js loader + mobile controller + save controls.
+- `game.data` (~88 MB) — preloaded LÖVE2D assets (sprites, BGM, SCP scripts, FAM maps, etc.).
+- `game.js` / `love.js` / `love.wasm` / `love.worker.js` — Emscripten port of LÖVE 11.5.
+- `coi-serviceworker.js` — injects COOP/COEP headers to enable SharedArrayBuffer (works around GitHub Pages' header limitations).
+- `mobile_input.{css,js}` — virtual joystick, buttons, and Korean IME support for mobile.
+- `save_controls.{css,js}` — save file download/upload (direct IndexedDB access).
+- `theme/` — love.js splash screen CSS.
+
+## Controls
+
+- **Desktop**: arrow keys / Enter / Space / ESC. Korean text input uses the OS IME (e.g. Cmd+Space).
+- **Mobile**: 4-direction virtual joystick (bottom-left) + esc/space/enter buttons (bottom-right). Tapping a keyboard button brings up a text field.
+
+## Limitations
+
+- Runs on love.js's Emscripten Lua 5.1 (no LuaJIT) — slightly slower than the native desktop build (not very noticeable in practice).
+- First load downloads ~88 MB of `game.data`; cached in IndexedDB afterward.
+- The audio context activates only after the first user input (keypress/tap), per browser autoplay policy.
+
+## License
+
+Copyright for the original game assets belongs to their original rights holders. This web build exists for reverse-engineering, research, and preservation purposes.
+
+---
+
+<h1 align="center">포가튼사가 (Forgotten Saga) — Web Build</h1>
 
 1997 한국 DOS RPG "포가튼사가" 의 Love2D 재구현 web build.
 
