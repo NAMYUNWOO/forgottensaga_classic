@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260819095733"></script>
+    <script src="coi-serviceworker.js?v=20260819144824"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260819095733">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260819095733">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260819095733">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260819095733">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260819144824">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260819144824">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260819144824">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260819144824">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -283,11 +283,48 @@
     </div>
 
     <script type='text/javascript'>
-      function goFullScreen() {
-        var canvas = document.getElementById("canvas");
-        if (canvas.requestFullscreen) canvas.requestFullscreen();
-        else if (canvas.webkitRequestFullScreen) canvas.webkitRequestFullScreen();
+      // 전체화면 토글 — 페이지 전체 (documentElement) 를 전체화면으로. 이전엔 canvas 만
+      // 전체화면으로 잡아 컨트롤 row (이 버튼 포함) 가 사라져 모바일에서 되돌아올 방법이
+      // 없었음 (2026-08-19 사용자 보고). 이제 컨트롤 row 가 그대로 보이고 같은 버튼이
+      // "창모드" 로 바뀌어 토글. Fullscreen API 없는 환경 (iPhone Safari) 은 버튼 숨김.
+      function _fsElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement
+            || document.mozFullScreenElement || document.msFullscreenElement || null;
       }
+      function _fsSupported() {
+        var el = document.documentElement;
+        return !!(el.requestFullscreen || el.webkitRequestFullscreen
+                  || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen);
+      }
+      function goFullScreen() {
+        try {
+          if (_fsElement()) {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
+            else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+            else if (document.msExitFullscreen) document.msExitFullscreen();
+            return;
+          }
+          var el = document.documentElement;
+          var p = null;
+          if (el.requestFullscreen) p = el.requestFullscreen({ navigationUI: 'hide' });
+          else if (el.webkitRequestFullscreen) p = el.webkitRequestFullscreen();
+          else if (el.webkitRequestFullScreen) p = el.webkitRequestFullScreen();
+          else if (el.mozRequestFullScreen) p = el.mozRequestFullScreen();
+          else if (el.msRequestFullscreen) p = el.msRequestFullscreen();
+          if (p && p.catch) p.catch(function(e) { console.warn('[fullscreen] request fail:', e); });
+        } catch (e) { console.warn('[fullscreen] error:', e); }
+      }
+      function _updateFullscreenBtn() {
+        var b = document.getElementById('btn-fullscreen');
+        if (!b) return;
+        if (!_fsSupported()) { b.style.display = 'none'; return; }
+        b.textContent = _fsElement() ? '창모드' : '전체화면';
+        b.classList.toggle('active', !!_fsElement());
+      }
+      ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+        .forEach(function(ev) { document.addEventListener(ev, _updateFullscreenBtn); });
       // Splash overlay 의 substatus 텍스트만 update (text 는 "로딩 중..." 고정).
       function setSplashSubstatus(text) {
         var el = document.getElementById('splash-substatus');
@@ -448,6 +485,7 @@
         if (window.SaveControls) SaveControls.install();
         var fbtn = document.getElementById('btn-fullscreen');
         if (fbtn) fbtn.addEventListener('click', goFullScreen);
+        _updateFullscreenBtn();
         var sbtn = document.getElementById('btn-sound');
         if (sbtn) sbtn.addEventListener('click', toggleSound);
       };
@@ -829,8 +867,8 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="nipplejs.min.js?v=20260819095733"></script>
-    <script type="text/javascript" src="mobile_input.js?v=20260819095733"></script>
+    <script type="text/javascript" src="nipplejs.min.js?v=20260819144824"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260819144824"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -850,8 +888,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260819095733"></script>
-    <script type="text/javascript" src="game.js?v=20260819095733"></script>
-    <script async type="text/javascript" src="love.js?v=20260819095733" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260819144824"></script>
+    <script type="text/javascript" src="game.js?v=20260819144824"></script>
+    <script async type="text/javascript" src="love.js?v=20260819144824" onload="applicationLoad(this)"></script>
   </body>
 </html>
