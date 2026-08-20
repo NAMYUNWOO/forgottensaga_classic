@@ -65,6 +65,71 @@
     line-height: 1.5;
 }
 
+/* === 배속 탭 (fosa_engine native-touch 빌드에서만 탭 표시 — patch_native_touch.py) === */
+#save-panel .tab-btn.tab-speed-only { display: none; }
+#save-panel .speed-content h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    color: #ffd566;
+}
+#save-panel .speed-content .speed-sub {
+    font-size: 11px;
+    color: #999;
+    margin: 0 0 14px;
+}
+#save-panel .speed-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#save-panel .speed-row input[type=range] {
+    flex: 1;
+    min-width: 0;
+    accent-color: #ffd566;
+    height: 28px;
+}
+#save-panel .speed-step {
+    width: 40px; height: 40px;
+    font-size: 20px;
+    line-height: 1;
+    background: rgba(80, 110, 160, 0.5);
+    color: #fff;
+    border: 1px solid rgba(150, 180, 220, 0.4);
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+}
+#save-panel .speed-step:hover { background: rgba(120, 160, 220, 0.7); }
+#save-panel .speed-value-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+#save-panel #speed-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffd566;
+    font-variant-numeric: tabular-nums;
+}
+#save-panel #speed-reset {
+    background: rgba(50, 50, 65, 0.6);
+    color: #ddd;
+    border: 1px solid rgba(150, 150, 170, 0.3);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+}
+#save-panel #speed-reset:hover { background: rgba(80, 80, 110, 0.7); }
+#save-panel #speed-status {
+    font-size: 11px;
+    color: #9ab;
+    margin-top: 8px;
+    min-height: 14px;
+}
+
 /* === 개발자로그 탭 === */
 #save-panel .log-toolbar {
     display: flex;

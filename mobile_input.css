@@ -68,6 +68,31 @@
     background: rgba(60, 80, 110, 0.55);
 }
 
+/* === D-pad (좌하단, native-touch 빌드) — 상 / 좌 하 우 십자 배치 ===
+ * 기본 숨김 (production 은 nipplejs 조이스틱). body.native-touch 에서 표시.
+ */
+#mobile-input .dpad {
+    position: absolute;
+    left: 14px; bottom: 14px;
+    display: none;
+    grid-template-columns: 60px 60px 60px;
+    grid-template-rows: 60px 60px;
+    gap: 8px;
+    pointer-events: auto;
+    touch-action: none;
+}
+#mobile-input .dpad .dbtn {
+    width: 60px; height: 60px;
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(40, 40, 60, 0.6);
+}
+#mobile-input .dpad .up    { grid-column: 2; grid-row: 1; }
+#mobile-input .dpad .left  { grid-column: 1; grid-row: 2; }
+#mobile-input .dpad .down  { grid-column: 2; grid-row: 2; }
+#mobile-input .dpad .right { grid-column: 3; grid-row: 2; }
+#mobile-input .dpad .dbtn.pressed { background: rgba(120, 160, 220, 0.75); }
+
 /* === Action 버튼 (우하단) ===
  * Layout:        esc
  *           space   enter

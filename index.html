@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260819144824"></script>
+    <script src="coi-serviceworker.js?v=20260820132049"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260819144824">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260819144824">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260819144824">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260819144824">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260820132049">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260820132049">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260820132049">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260820132049">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -183,8 +183,33 @@
         <div class="tab-nav">
           <button class="tab-btn tab-active" data-tab="saves">세이브파일관리</button>
           <button class="tab-btn" data-tab="notes">개발자노트</button>
+          <button class="tab-btn tab-speed-only" data-tab="speed">배속</button>
           <button class="tab-btn" data-tab="log">디버그로그</button>
           <button class="tab-btn" data-tab="dmca">DMCA</button>
+        </div>
+
+        <!-- 배속 탭 — fosa_engine (native-touch) 빌드에서만 표시 (patch_native_touch.py CSS).
+             슬라이더 값 → 게임에 제어 문자열 전송 (SDL_SendKeyboardText → love.textinput
+             "⟦FOSA:speed=N⟧"), localStorage 보존 + 부팅 후 재전송. -->
+        <div class="tab-pane" data-pane="speed">
+          <div class="speed-content">
+            <h3>게임 배속</h3>
+            <p class="speed-sub">— 원본(1.0×)이 기본값이자 최소값. 0.2 단위로 최대 3.0× 까지.</p>
+            <div class="speed-row">
+              <button class="speed-step" id="speed-minus" aria-label="느리게">−</button>
+              <input type="range" id="speed-range" min="1" max="3" step="0.2" value="1">
+              <button class="speed-step" id="speed-plus" aria-label="빠르게">+</button>
+            </div>
+            <div class="speed-value-row">
+              <span id="speed-value">1.0×</span>
+              <button id="speed-reset">기본값 (1.0×)</button>
+            </div>
+            <p class="hint">
+              이동·전투·대화 등 게임 진행 전체가 빨라집니다 (사운드는 그대로).<br>
+              설정은 이 브라우저에 저장되어 다음 접속에도 유지됩니다.
+            </p>
+            <div id="speed-status"></div>
+          </div>
         </div>
 
         <div class="tab-pane tab-active" data-pane="saves">
@@ -261,6 +286,14 @@
       <div id="mobile-input">
         <!-- 좌하단 조이스틱: nipplejs 가 자체 base/knob element 추가 (zone 으로 사용). -->
         <div class="joystick" id="joystick"></div>
+        <!-- 좌하단 D-pad (상 / 좌 하 우) — native-touch (fosa_engine) 빌드에서 조이스틱 대신 표시.
+             keydown/keyup 을 canvas 로 dispatch (홀드 시 반복). -->
+        <div class="dpad" id="dpad">
+          <button class="btn dbtn up"    data-key="up"    aria-label="위">▲</button>
+          <button class="btn dbtn left"  data-key="left"  aria-label="왼쪽">◀</button>
+          <button class="btn dbtn down"  data-key="down"  aria-label="아래">▼</button>
+          <button class="btn dbtn right" data-key="right" aria-label="오른쪽">▶</button>
+        </div>
 
         <!-- 우하단 액션: esc 위, space-enter 좌우. -->
         <div class="actions">
@@ -647,6 +680,70 @@
         } catch (e) {}
       };
 
+      // === 게임 배속 (fosa_engine 빌드 전용) ===
+      // 슬라이더 → 게임: SDL_SendKeyboardText 로 "⟦FOSA:speed=N⟧" textinput 주입
+      // (main.lua parse_control_text 가 가로채 state 로 forward 안 함). 부팅 완료
+      // (LOVE2D_BOOT_DONE) 후 localStorage 값 재전송.
+      window.SpeedControl = (function () {
+        var MIN = 1.0, MAX = 3.0, STEP = 0.2, KEY = 'fosa_game_speed';
+        var cur = MIN, ready = false;
+        function enabled() { return !!(document.body && document.body.classList.contains('native-touch')); }
+        function snap(v) {
+          v = Number(v); if (!isFinite(v)) v = MIN;
+          v = MIN + Math.round((v - MIN) / STEP) * STEP;
+          v = Math.round(v * 10) / 10;
+          return Math.min(MAX, Math.max(MIN, v));
+        }
+        function sendToGame(v) {
+          var M = window.Module;
+          var msg = '\u27E6FOSA:speed=' + v.toFixed(1) + '\u27E7';
+          try {
+            if (M && M.ccall) { M.ccall('SDL_SendKeyboardText', null, ['string'], [msg]); return true; }
+            if (M && typeof M._SDL_SendKeyboardText === 'function' && M.allocateUTF8 && M._free) {
+              var ptr = M.allocateUTF8(msg); M._SDL_SendKeyboardText(ptr); M._free(ptr); return true;
+            }
+          } catch (e) { console.warn('[speed] send failed:', e); }
+          return false;
+        }
+        function render() {
+          var r = document.getElementById('speed-range');
+          var t = document.getElementById('speed-value');
+          if (r) r.value = String(cur);
+          if (t) t.textContent = cur.toFixed(1) + '\u00d7';
+          var st = document.getElementById('speed-status');
+          if (st) st.textContent = ready ? '' : '게임 로딩 후 적용됩니다';
+        }
+        function apply(v, opts) {
+          cur = snap(v);
+          try { localStorage.setItem(KEY, String(cur)); } catch (e) {}
+          render();
+          if (ready && enabled()) sendToGame(cur);
+          if (opts && opts.log && window.__logPush) window.__logPush('[speed] ui → ' + cur.toFixed(1), false);
+        }
+        function onBoot() {
+          ready = true;
+          render();
+          if (!enabled()) return;
+          // 부팅 직후 textinput 파이프 준비 여유 (1회 + 1.5s 후 재전송으로 안전)
+          sendToGame(cur);
+          setTimeout(function () { sendToGame(cur); }, 1500);
+        }
+        function install() {
+          try { var saved = localStorage.getItem(KEY); if (saved != null) cur = snap(saved); } catch (e) {}
+          var r = document.getElementById('speed-range');
+          if (r) r.addEventListener('input', function () { apply(r.value, { log: true }); });
+          var m = document.getElementById('speed-minus');
+          if (m) m.addEventListener('click', function () { apply(cur - STEP, { log: true }); });
+          var p = document.getElementById('speed-plus');
+          if (p) p.addEventListener('click', function () { apply(cur + STEP, { log: true }); });
+          var z = document.getElementById('speed-reset');
+          if (z) z.addEventListener('click', function () { apply(MIN, { log: true }); });
+          render();
+        }
+        return { install: install, onBoot: onBoot, apply: apply, get: function () { return cur; } };
+      })();
+      document.addEventListener('DOMContentLoaded', function () { window.SpeedControl.install(); });
+
       var Module = {
         arguments: ["./game.love"],
         INITIAL_MEMORY: 268435456,
@@ -660,6 +757,7 @@
           var trimmed = (text || '').replace(/[\r\n]+$/, '').trim();
           if (trimmed === window.LOVE2D_BOOT_DONE_SENTINEL) {
             hideSplash();
+            try { if (window.SpeedControl) window.SpeedControl.onBoot(); } catch (e) {}
             return;
           }
           var sdMatch = trimmed.match(/^\[SAVE_DIR\]\s+(.+)$/);
@@ -867,8 +965,8 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="nipplejs.min.js?v=20260819144824"></script>
-    <script type="text/javascript" src="mobile_input.js?v=20260819144824"></script>
+    <script type="text/javascript" src="nipplejs.min.js?v=20260820132049"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260820132049"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -888,8 +986,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260819144824"></script>
-    <script type="text/javascript" src="game.js?v=20260819144824"></script>
-    <script async type="text/javascript" src="love.js?v=20260819144824" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260820132049"></script>
+    <script type="text/javascript" src="game.js?v=20260820132049"></script>
+    <script async type="text/javascript" src="love.js?v=20260820132049" onload="applicationLoad(this)"></script>
   </body>
 </html>

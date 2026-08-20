@@ -359,9 +359,87 @@ const MobileInput = (() => {
     window.addEventListener('blur', () => setDir(null));
   }
 
+  // === D-pad (상/좌/하/우 버튼) — native-touch 빌드에서 조이스틱 대신 ===
+  // 누른 동안 keydown 유지 (게임 isDown 폴링 = 필드/전투 이동), 400ms 후 110ms 마다
+  // repeat keydown (메뉴 커서 홀드 스크롤), 떼면 keyup. 손가락이 버튼 사이로 미끄러지면
+  // (touchmove) 그 버튼 방향으로 전환. 멀티터치: 첫 손가락만 D-pad 소유.
+  function installDpad() {
+    var pad = document.getElementById('dpad');
+    if (!pad) return;
+    var canvas = document.getElementById('canvas') || window;
+    var REPEAT_DELAY = 400, REPEAT_INTERVAL = 110;
+    var curDir = null, curBtn = null, repeatTimer = null, repeatInterval = null, touchId = null;
+
+    function clearRepeat() {
+      if (repeatTimer) { clearTimeout(repeatTimer); repeatTimer = null; }
+      if (repeatInterval) { clearInterval(repeatInterval); repeatInterval = null; }
+    }
+    function startRepeat(dir) {
+      clearRepeat();
+      repeatTimer = setTimeout(function() {
+        repeatInterval = setInterval(function() {
+          if (curDir !== dir) { clearRepeat(); return; }
+          var def = KEY_MAP[dir]; if (!def) return;
+          canvas.dispatchEvent(new KeyboardEvent('keydown', {
+            key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+            repeat: true, bubbles: true, cancelable: true,
+          }));
+        }, REPEAT_INTERVAL);
+      }, REPEAT_DELAY);
+    }
+    function setDir(newDir, btn) {
+      if (newDir === curDir) return;
+      if (curDir) { dispatchKey(canvas, 'keyup', curDir); clearRepeat(); }
+      if (curBtn) curBtn.classList.remove('pressed');
+      curDir = newDir; curBtn = btn || null;
+      if (newDir) { dispatchKey(canvas, 'keydown', newDir); startRepeat(newDir); }
+      if (curBtn) curBtn.classList.add('pressed');
+    }
+    function btnAt(x, y) {
+      var el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      var b = el.closest ? el.closest('.dbtn') : null;
+      return (b && pad.contains(b)) ? b : null;
+    }
+    pad.addEventListener('touchstart', function(ev) {
+      ev.preventDefault();
+      if (touchId !== null) return;
+      var t = ev.changedTouches[0];
+      touchId = t.identifier;
+      var b = btnAt(t.clientX, t.clientY);
+      setDir(b ? b.dataset.key : null, b);
+    }, { passive: false });
+    pad.addEventListener('touchmove', function(ev) {
+      ev.preventDefault();
+      for (var i = 0; i < ev.changedTouches.length; i++) {
+        var t = ev.changedTouches[i];
+        if (t.identifier !== touchId) continue;
+        var b = btnAt(t.clientX, t.clientY);
+        setDir(b ? b.dataset.key : null, b);
+      }
+    }, { passive: false });
+    function endTouch(ev) {
+      ev.preventDefault();
+      for (var i = 0; i < ev.changedTouches.length; i++) {
+        if (ev.changedTouches[i].identifier === touchId) { touchId = null; setDir(null, null); }
+      }
+    }
+    pad.addEventListener('touchend', endTouch, { passive: false });
+    pad.addEventListener('touchcancel', endTouch, { passive: false });
+    // 마우스 (데스크톱 디버그)
+    pad.querySelectorAll('.dbtn').forEach(function(b) {
+      b.addEventListener('mousedown', function(ev) { ev.preventDefault(); setDir(b.dataset.key, b); });
+      b.addEventListener('mouseup', function() { setDir(null, null); });
+      b.addEventListener('mouseleave', function() { if (curBtn === b) setDir(null, null); });
+    });
+    document.addEventListener('visibilitychange', function() { if (document.hidden) setDir(null, null); });
+    window.addEventListener('blur', function() { setDir(null, null); });
+  }
+
   function install() {
-    // 좌하단 조이스틱 (D-pad 대체)
+    // 좌하단 조이스틱 (D-pad 대체) — native-touch 빌드는 CSS 로 조이스틱 숨김 + D-pad 표시
     installJoystick();
+    installDpad();
     // Action 버튼 (esc / space / enter)
     document.querySelectorAll('#mobile-input .actions .btn').forEach(el => {
       const k = el.dataset.key;
