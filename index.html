@@ -4,7 +4,7 @@
     <!-- COOP/COEP for SharedArrayBuffer (love.js normal mode 요구).
          GitHub Pages 가 직접 헤더 보내지 않으므로 service worker 가 fetch event
          에 inject. https://github.com/gzuidhof/coi-serviceworker -->
-    <script src="coi-serviceworker.js?v=20260830130520"></script>
+    <script src="coi-serviceworker.js?v=20260904234958"></script>
     <meta charset="utf-8">
     <!-- Cache 차단 — 새 deploy 즉시 사용자에게 fresh HTML 전달.
          CDN max-age 600s 의존 X. 매 진입 시 fresh fetch → 새 ?v= cache busting hash
@@ -16,10 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>포가튼사가</title>
-    <link rel="icon" type="image/png" href="favicon.png?v=20260830130520">
-    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260830130520">
-    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260830130520">
-    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260830130520">
+    <link rel="icon" type="image/png" href="favicon.png?v=20260904234958">
+    <link rel="stylesheet" type="text/css" href="theme/love.css?v=20260904234958">
+    <link rel="stylesheet" type="text/css" href="mobile_input.css?v=20260904234958">
+    <link rel="stylesheet" type="text/css" href="save_controls.css?v=20260904234958">
     <style>
       html, body {
         margin: 0; padding: 0;
@@ -773,8 +773,22 @@
       })();
       document.addEventListener('DOMContentLoaded', function () { window.SpeedControl.install(); });
 
+      // URL 쿼리 → 게임 인자. `?mods=1` 이면 mods/ 로드 활성 (데스크톱 `--mods` 동등),
+      // `?env=NAME=VALUE` 는 main.lua 의 --env 패스스루 (TOUCH_TRACE 등). mod 빌드를
+      // 링크 하나로 공유하기 위한 경로 (2026-09-02).
+      var __fosaArgs = (function () {
+        var a = ["./game.love"];
+        try {
+          var q = new URLSearchParams(window.location.search);
+          if (q.get("mods") === "1" || q.get("mods") === "true") a.push("--mods");
+          q.getAll("env").forEach(function (e) { if (e) a.push("--env=" + e); });
+          var m = q.get("map"); if (m) { a.push("--skip"); a.push("--map=" + m); }
+        } catch (e) { /* URLSearchParams 미지원 브라우저 → 기본 인자 */ }
+        return a;
+      })();
+
       var Module = {
-        arguments: ["./game.love"],
+        arguments: __fosaArgs,
         INITIAL_MEMORY: 268435456,
         preRun: [preRunInjectUploads],
         printErr: function(text) {
@@ -994,8 +1008,8 @@
 
       var applicationLoad = function(e) { Love(Module); };
     </script>
-    <script type="text/javascript" src="nipplejs.min.js?v=20260830130520"></script>
-    <script type="text/javascript" src="mobile_input.js?v=20260830130520"></script>
+    <script type="text/javascript" src="nipplejs.min.js?v=20260904234958"></script>
+    <script type="text/javascript" src="mobile_input.js?v=20260904234958"></script>
     <script type="text/javascript">
       // 비-Chromium 브라우저 안내. UA 검사: Chrome/CriOS 면 OK, Edg/OPR/SamsungBrowser
       // 같은 Chromium 변형도 OK 처리 (love.js 호환성 비슷). Firefox/Safari/iOS Safari 만 안내.
@@ -1015,8 +1029,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="text/javascript" src="save_controls.js?v=20260830130520"></script>
-    <script type="text/javascript" src="game.js?v=20260830130520"></script>
-    <script async type="text/javascript" src="love.js?v=20260830130520" onload="applicationLoad(this)"></script>
+    <script type="text/javascript" src="save_controls.js?v=20260904234958"></script>
+    <script type="text/javascript" src="game.js?v=20260904234958"></script>
+    <script async type="text/javascript" src="love.js?v=20260904234958" onload="applicationLoad(this)"></script>
   </body>
 </html>
